@@ -152,7 +152,7 @@ void render_pattern_tables(State2C02 *ppu, SDL_Window *window) {
     int width = SDL_GetWindowSurface(window)->w;
     int height = SDL_GetWindowSurface(window)->h;
 
-    FILE *chr = fopen("pattern_table.txt", "w+");
+    // FILE *chr = fopen("pattern_table.txt", "w+");
 
     uint32_t colors[4] = {0x00000, 0x555555, 0xbbbbbb, 0xffffff};
     int count = 0;
@@ -175,7 +175,7 @@ void render_pattern_tables(State2C02 *ppu, SDL_Window *window) {
                     // getchar();
                 }
                 set_pixel(window, x, y, colors[pixel]);
-                fprintf(chr, "%d ", pixel);
+                // fprintf(chr, "%d ", pixel);
                 count += 1;
             }
         }

@@ -41,14 +41,14 @@ void loadROM(State6502 *cpu, char filename[]) {
         ppu_write_to_bus(cpu->bus, i, buffer[i + 0x4010]);
     }
 
-    FILE *debug = fopen("debug.txt", "w+");
+    // FILE *debug = fopen("debug.txt", "w+");
 
-    for (int i = 0; i < 0x2000; i++) {
-        if (i != 0 && i % 16 == 0) {
-            fprintf(debug, "\n");
-        }
-        fprintf(debug, "%02x ", ppu_read_from_bus(cpu->bus, i));
-    }
+    // for (int i = 0; i < 0x2000; i++) {
+    //     if (i != 0 && i % 16 == 0) {
+    //         fprintf(debug, "\n");
+    //     }
+    //     fprintf(debug, "%02x ", ppu_read_from_bus(cpu->bus, i));
+    // }
 }
 
 int main(int argc, char **argv) {
