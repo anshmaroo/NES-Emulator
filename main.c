@@ -71,9 +71,6 @@ int main(int argc, char **argv) {
         // Handle error appropriately
     }
 
-    render_pattern_tables(ppu, window);
-
-    printf("SHOW WINDOW: \n");
     SDL_ShowWindow(window);
 
     // Check if the window is shown
@@ -85,12 +82,21 @@ int main(int argc, char **argv) {
     SDL_Event event;
     bool quit = false;
 
+    reset(cpu);  // set pc to reset vector
+
     while (!quit) {
+
+        render_pattern_tables(ppu, window);
+        emulate6502Op(cpu);
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
                     case SDLK_q:
                         quit = true;
+                        free(cpu);
+                        free(ppu);
+                        free(bus);
+                        free(window);
                         exit(0);
                 }
             }
@@ -104,13 +110,6 @@ int main(int argc, char **argv) {
         SDL_Delay(100);
     }
 
-    reset(cpu);  // set pc to reset vector
-
-    while (cpu->pc < 0xffff) {
-        emulate6502Op(cpu);
-        getchar();
-    }
-    printf("EXECUTION FINISHED\n");
 
     return 0;
 }
