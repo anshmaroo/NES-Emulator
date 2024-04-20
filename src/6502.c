@@ -704,7 +704,7 @@ static inline void lax(State6502 *cpu, uint16_t address) {
 /************************ EMULATION ************************/
 
 int emulate6502Op(State6502 *cpu) {
-    unsigned char *opcode = &cpu->bus->cpu_ram[cpu->pc];
+    uint8_t opcode[3] = {cpu_read_from_bus(cpu->bus, cpu->pc), cpu_read_from_bus(cpu->bus, cpu->pc + 1), cpu_read_from_bus(cpu->bus, cpu->pc + 2)};
     bool add_bytes = true;
 
     if (FOR_CPUDIAG)

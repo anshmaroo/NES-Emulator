@@ -64,7 +64,16 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
             break;
 
         case 0x06:  // PPUADDR
-            ppu->ppuaddr.address_byte = value;
+            if(ppu->address_latch == 0) {
+                ppu->address = (value << 8) | 0xff00;
+                ppu->address_latch = 1;
+            }
+
+            else if(ppu->address_latch == 1) {
+                ppu->address |= value;
+                ppu->address_latch = 0;
+            }
+
             break;
 
         case 0x07:  // PPUDATA
@@ -109,9 +118,15 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
             break;
 
         case 0x02:  // STATUS
+            ppu->status.vblank = 1;
+
             value |= ppu->status.vblank << 7;
             value |= ppu->status.sprite_0_hit << 6;
             value |= ppu->status.sprite_overflow << 5;
+            value |= ppu->data_buffer & 0x1f;
+
+            ppu->status.vblank = 0;
+            ppu->address_latch = 0;
             break;
 
         case 0x03:  // OAMADDR
@@ -127,11 +142,15 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
             break;
 
         case 0x06:  // PPUADDR
-            value = ppu->ppuaddr.address_byte;
             break;
 
         case 0x07:  // PPUDATA
-            value = ppu->ppudata.data;
+            value = ppu->data_buffer;
+            ppu->data_buffer = ppu_read_from_bus(ppu->bus, ppu->address);
+            
+            if(ppu->address > 0x3f00)
+                value = ppu->data_buffer;
+
             break;
 
         case 0x4014:  // OAMDMA

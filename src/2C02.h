@@ -66,8 +66,16 @@ typedef struct State2C02 {
     PPUdata ppudata;
     OAMdma oamdma;
 
-    struct Bus *bus;
+    
+    // PPU STATUS
+    uint16_t scanline;
     uint16_t cycles;
+    uint8_t data_buffer;
+    uint16_t address;
+    bool address_latch;
+
+    // BUS
+    struct Bus *bus;
 
 } State2C02;
 

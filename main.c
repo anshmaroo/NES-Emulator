@@ -32,7 +32,7 @@ void loadROM(State6502 *cpu, char filename[]) {
     fclose(f);
 
     // LOAD PROGRAM ROM
-    for (int i = 0; i < 0x4000; i++) {
+    for (int i = 0; i < 0x6000; i++) {
         cpu_write_to_bus(cpu->bus, 0xc000 + i, buffer[i + 0x10]);
     }
 
@@ -75,7 +75,6 @@ int main(int argc, char **argv) {
 
     printf("SHOW WINDOW: \n");
     SDL_ShowWindow(window);
-    
 
     // Check if the window is shown
     if ((!SDL_GetWindowFlags(window)) & SDL_WINDOW_SHOWN) {
@@ -89,12 +88,11 @@ int main(int argc, char **argv) {
     while (!quit) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_KEYDOWN) {
-                switch(event.key.keysym.sym) {
+                switch (event.key.keysym.sym) {
                     case SDLK_q:
                         quit = true;
                         exit(0);
                 }
-                    
             }
         }
 
@@ -105,8 +103,6 @@ int main(int argc, char **argv) {
         // Add some delay to prevent busy-waiting
         SDL_Delay(100);
     }
-
-    
 
     reset(cpu);  // set pc to reset vector
 

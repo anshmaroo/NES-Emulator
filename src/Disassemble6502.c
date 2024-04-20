@@ -11,7 +11,7 @@
 int Disassemble6502Op(uint8_t *codebuffer, int pc) {
     uint8_t *opcodes = &codebuffer[0];
     int opbytes = 1; // set # of bytes for operation to 1 by default
-    printf("%04x ", pc); // print the program opbyteser addressl
+    printf("%04x %02x ", pc, opcodes[0]); // print the program opbyteser addressl
 
     switch (opcodes[0]) 
     {
