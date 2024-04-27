@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 
-#define FOR_CPUDIAG true
+#define FOR_CPUDIAG false
 
 static const uint8_t OPCODES_CYCLES[256] = {
     // 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
@@ -29,11 +29,11 @@ static const uint8_t OPCODES_CYCLES[256] = {
 
 static const uint8_t OPCODES_BYTES[256] = {
  // 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-    1, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 0
+    0, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 0
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 2, 3, 3, 3, 3, 3,  // 1
-    3, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 2
+    0, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 2
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,  // 3
-    1, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 4
+    1, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 0, 3, 3, 3,  // 4
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,  // 5
     1, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 6
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,  // 7
@@ -74,7 +74,8 @@ typedef struct State6502 {
     uint16_t cycles;
 
     struct Bus *bus;
-    uint8_t *memory;
+    
+    // uint8_t *memory;
 
 } State6502;
 
@@ -360,7 +361,7 @@ static inline void irq(State6502 *cpu);
  *
  * @param cpu
  */
-static inline void nmi(State6502 *cpu);
+void nmi(State6502 *cpu);
 
 /************************ BRANCH/JUMP FUNCTIONS ************************/
 /**
@@ -494,14 +495,6 @@ static inline void sre(State6502 *cpu, uint16_t address);
 static inline void rra(State6502 *cpu, uint16_t address);
 
 /**
- * @brief A and X -> M
- * 
- * @param cpu 
- * @param address 
- */
-static inline void sax(State6502 *cpu, uint16_t address);
-
-/**
  * @brief magic
  * 
  * @param cpu 
@@ -518,13 +511,76 @@ static inline void ane(State6502 *cpu, uint8_t value);
 static inline void arr(State6502 *cpu, uint8_t value);
 
 /**
- * @brief lda + ldx
+ * @brief ahx + axa
+ *
+ * @param cpu
+ */
+static inline void sha(State6502 *cpu, uint16_t address);
+
+/**
+ * @brief and + store in memory
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void sax(State6502 *cpu, uint16_t address);
+
+/**
+ * @brief set stack pointer to a & x, then SHY
  * 
  * @param cpu 
  * @param address 
  */
-static inline void lax(State6502 *cpu, uint16_t address);
+static inline void tas(State6502 *cpu, uint16_t address);
+
+/**
+ * @brief x & (address high byte + 1) -> memory[address]
+ * 
+ * @param cpu 
+ * @param address 
+ */
+static inline void shx(State6502 *cpu, uint16_t address);
+
+/**
+ * @brief lda + ldx
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void lax(State6502 *cpu, uint8_t value);
+
+/**
+ * @brief lda/tsx
+ * 
+ * @param cpu 
+ * @param address 
+ */
+static inline void las(State6502 *cpu, uint16_t address);
+
+/**
+ * @brief dec + cmp
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void dcp(State6502 *cpu, uint16_t address);
+
+/**
+ * @brief inc + sbc
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void isc(State6502 *cpu, uint16_t address);
+
 
 /************************ EMULATION ************************/
 
-int emulate6502Op(State6502 *cpu);
+int emulate6502Op(State6502 *cpu, uint8_t *opcode);
+
+/**
+ * @brief perform one cpu clock cycle
+ * 
+ * @param cpu 
+ */
+void clock_cpu(State6502 *cpu);

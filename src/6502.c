@@ -1,6 +1,6 @@
-#include "Disassemble6502.h"
 #include "6502.h"
 #include "2C02.h"
+#include "Disassemble6502.h"
 #include "bus.h"
 
 /************************ CREATE OBJECT ************************/
@@ -282,11 +282,11 @@ static uint8_t pop(State6502 *cpu) {
 static inline void push_16(State6502 *cpu, uint16_t value) {
     push(cpu, (value & 0xff00) >> 8);
     push(cpu, (value & 0xff));
-    printf("NOW ON STACK:\n");
-    printf("\tcpu->ram[%d] = %d\n", ((0x0100) | (cpu->sp + 2)),
-           cpu_read_from_bus(cpu->bus, (0x0100) | (((cpu->sp + 2)) & 0xff)));
-    printf("\tcpu->ram[%d] = %d\n", ((0x0100) | (cpu->sp + 1)),
-           cpu_read_from_bus(cpu->bus, (0x0100) | (((cpu->sp + 1)) & 0xff)));
+    // printf("NOW ON STACK:\n");
+    // printf("\tcpu->ram[%d] = %d\n", ((0x0100) | (cpu->sp + 2)),
+    //        cpu_read_from_bus(cpu->bus, (0x0100) | (((cpu->sp + 2)) & 0xff)));
+    // printf("\tcpu->ram[%d] = %d\n", ((0x0100) | (cpu->sp + 1)),
+    //        cpu_read_from_bus(cpu->bus, (0x0100) | (((cpu->sp + 1)) & 0xff)));
 }
 
 /**
@@ -452,10 +452,11 @@ static inline void irq(State6502 *cpu) {
  *
  * @param cpu
  */
-static inline void nmi(State6502 *cpu) {
+void nmi(State6502 *cpu) {
     push_16(cpu, cpu->pc);
     push(cpu, get_status_register(cpu));
     cpu->pc = (cpu_read_from_bus(cpu->bus, 0xfffb) << 8) | cpu_read_from_bus(cpu->bus, 0xfffa);
+    // printf("NMI OCCURRED, PC = %04x\n", cpu->pc);
     cpu->cycles += 7;
 }
 
@@ -660,16 +661,6 @@ static inline void rra(State6502 *cpu, uint16_t address) {
 }
 
 /**
- * @brief A and X -> M
- *
- * @param cpu
- * @param address
- */
-static inline void sax(State6502 *cpu, uint16_t address) {
-    cpu_write_to_bus(cpu->bus, address, cpu->a & cpu->x);
-}
-
-/**
  * @brief magic
  *
  * @param cpu
@@ -691,22 +682,100 @@ static inline void arr(State6502 *cpu, uint8_t value) {
 }
 
 /**
+ * @brief ahx + axa
+ *
+ * @param cpu
+ */
+static inline void sha(State6502 *cpu, uint16_t address) {
+    uint8_t value = cpu_read_from_bus(cpu->bus, (address >> 8) & 0xff + 1) & cpu->a & cpu->x;
+    cpu_write_to_bus(cpu->bus, address, value);
+}
+
+/**
+ * @brief and + store in memory
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void sax(State6502 *cpu, uint16_t address) {
+    cpu_write_to_bus(cpu->bus, address, cpu->a & cpu->x);
+}
+
+/**
+ * @brief set stack pointer to a & x, then SHY
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void tas(State6502 *cpu, uint16_t address) {
+    cpu->sp = cpu->a & cpu->x;
+    sha(cpu, address);
+}
+
+/**
+ * @brief x & (address high byte + 1) -> memory[address]
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void shx(State6502 *cpu, uint16_t address) {
+    uint8_t value = cpu->x & cpu_read_from_bus(cpu->bus, (address >> 8) & 0xff + 1);
+    cpu_write_to_bus(cpu->bus, address, value);
+}
+
+/**
  * @brief lda + ldx
  *
  * @param cpu
  * @param address
  */
-static inline void lax(State6502 *cpu, uint16_t address) {
-    lda(cpu, cpu_read_from_bus(cpu->bus, address));
-    ldx(cpu, cpu_read_from_bus(cpu->bus, address));
+static inline void lax(State6502 *cpu, uint8_t value) {
+    lda(cpu, value);
+    ldx(cpu, value);
 }
+
+/**
+ * @brief lda/tsx
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void las(State6502 *cpu, uint16_t address) {
+    uint8_t value = cpu_read_from_bus(cpu->bus, address) & cpu->sp;
+    lda(cpu, value);
+    ldx(cpu, value);
+    cpu->sp = value;
+}
+
+/**
+ * @brief dec + cmp
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void dcp(State6502 *cpu, uint16_t address) {
+    dec(cpu, address);
+    cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
+}
+
+/**
+ * @brief inc + sbc
+ *
+ * @param cpu
+ * @param address
+ */
+static inline void isc(State6502 *cpu, uint16_t address) {
+    inc(cpu, address);
+    sbc(cpu, cpu_read_from_bus(cpu->bus, address));
+}
+
+
 
 /************************ EMULATION ************************/
 
-int emulate6502Op(State6502 *cpu) {
-    uint8_t opcode[3] = {cpu_read_from_bus(cpu->bus, cpu->pc), cpu_read_from_bus(cpu->bus, cpu->pc + 1), cpu_read_from_bus(cpu->bus, cpu->pc + 2)};
-    bool add_bytes = true;
+int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
+    
     if (FOR_CPUDIAG)
         Disassemble6502Op(opcode, cpu->pc);
 
@@ -819,6 +888,7 @@ int emulate6502Op(State6502 *cpu) {
             slo(cpu, address);
             break;
         }
+
 
         case 0x10:  // BPL $oper (relative)
         {
@@ -942,14 +1012,13 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        
         case 0x20:  // JSR $oper $oper (absolute)
         {
             push_16(cpu, cpu->pc + 2);
 
             uint16_t address = (opcode[2] << 8 | opcode[1]);
             cpu->pc = address;
-
-            add_bytes = false;
             break;
         }
 
@@ -1050,6 +1119,7 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        
         case 0x30:  // BMI (relative)
         {
             if (cpu->sr.n == 1)
@@ -1170,6 +1240,7 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        
         case 0x40:  // RTI
         {
             set_status_register(cpu, pop(cpu));
@@ -1266,6 +1337,14 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0x4f:  // SRE $oper $oper (absolute)
+        {
+            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            sre(cpu, address);
+            break;
+        }
+
+        
         case 0x50:  // BVC $oper (relative)
         {
             if (cpu->sr.v == 0)
@@ -1386,6 +1465,7 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        
         case 0x60:  // RTS (implied)
         {
             cpu->pc = pop_16(cpu);
@@ -1464,9 +1544,7 @@ int emulate6502Op(State6502 *cpu) {
         case 0x6c:  // JMP ($oper $oper) (indirect)
         {
             uint16_t index = (opcode[2] << 8) | opcode[1];
-            printf("\nINDEX = %d\n", index);
             uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
-            printf("ADDRESS = %d\n", address);
             jump(cpu, address);
             break;
         }
@@ -1485,6 +1563,7 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        
         case 0x6f:  // RRA $oper $oper (absolute)
         {
             uint16_t address = (opcode[2] << 8 | opcode[1]);
@@ -1612,6 +1691,7 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        
         case 0x80:  // NOP
         {
             break;
@@ -1712,6 +1792,7 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+       
         case 0x90:  // BCC (relative)
         {
             if (cpu->sr.c == 0)
@@ -1729,6 +1810,14 @@ int emulate6502Op(State6502 *cpu) {
 
         case 0x92:  // JAM
         {
+            break;
+        }
+
+        case 0x93:  // SHA ($oper), Y (indirect, Y-indexed)
+        {
+            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
+            uint16_t address = index + cpu->y;
+            sha(cpu, address);
             break;
         }
 
@@ -1763,6 +1852,13 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0x97:  // SAX $oper, Y (zero-page, y-indexed)
+        {
+            uint8_t address = (cpu->y + opcode[1]) & 0xff;
+            sax(cpu, address);
+            break;
+        }
+
         case 0x98:  // TYA (implied)
         {
             tya(cpu);
@@ -1782,6 +1878,20 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0x9b:  // TAS Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            tas(cpu, address);
+            break;
+        }
+
+        case 0x9c:  // SHY X, $oper $oper (absolute, x-indexed)
+        {
+            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            sta(cpu, address);
+            break;
+        }
+
         case 0x9d:  // STA X, $oper $oper (absolute, x-indexed)
         {
             uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
@@ -1789,6 +1899,21 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0x9e:  // SHX Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            shx(cpu, address);
+            break;
+        }
+
+        case 0x9f:  // SHA  Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            sha(cpu, address);
+            break;
+        }
+
+        
         case 0xa0:  // LDY #$oper (immediate)
         {
             ldy(cpu, opcode[1]);
@@ -1806,6 +1931,14 @@ int emulate6502Op(State6502 *cpu) {
         case 0xa2:  // LDX #$oper (immediate)
         {
             ldx(cpu, opcode[1]);
+            break;
+        }
+
+        case 0xa3:  // LAX (X, $oper) (X-indexed, indirect)
+        {
+            uint8_t index = (opcode[1] + cpu->x) & 0xff;
+            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            lax(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
@@ -1827,6 +1960,11 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xa7:  // LAX $oper (zero-page)
+        {
+            lax(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+        }
+
         case 0xa8:  // TAY (implied)
         {
             tay(cpu);
@@ -1843,6 +1981,11 @@ int emulate6502Op(State6502 *cpu) {
         {
             tax(cpu);
             break;
+        }
+
+        case 0xab:  // LXA
+        {
+            lax(cpu, opcode[1]);
         }
 
         case 0xac:  // LDY $oper $oper (absolute)
@@ -1866,6 +2009,14 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xaf:  // LAX $oper $oper (absolute)
+        {
+            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            lax(cpu, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
+        
         case 0xb0:  // BCS (relative)
         {
             if (cpu->sr.c == 1)
@@ -1933,6 +2084,21 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xb7:  // LAX $oper, X (zero-page, y-indexed)
+        {
+            uint8_t address;
+            if ((opcode[1] >> 7) & 1) {
+                address = (cpu->y - (~opcode[1] + 1)) & 0xff;
+            } else {
+                address = (cpu->y + opcode[1]) & 0xff;
+            }
+            // address = (cpu->x + opcode[1]) & 0xff;
+
+            // printf("address = %d\n", address);
+            lax(cpu, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
         case 0xb8:  // CLV (implied)
         {
             cpu->sr.v = 0;
@@ -1952,6 +2118,13 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xbb:  // LAS Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            las(cpu, address);
+            break;
+        }
+
         case 0xbc:  // LDY X, $oper $oper (absolute, x-indexed)
         {
             uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
@@ -1966,13 +2139,21 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
-        case 0xbe:  // LDX X, $oper $oper (absolute, y-indexed)
+        case 0xbe:  // LDX Y, $oper $oper (absolute, y-indexed)
         {
             uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
             ldx(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
+        case 0xbf:  // LAX Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            lax(cpu, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
+        
         case 0xc0:  // CPY #$oper (immediate)
         {
             cmp(cpu, cpu->y, opcode[1]);
@@ -1984,6 +2165,19 @@ int emulate6502Op(State6502 *cpu) {
             uint8_t index = (opcode[1] + cpu->x) & 0xff;
             uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
+        case 0xc2:  // NOP
+        {
+            break;
+        }
+
+        case 0xc3:  // DCP (X, $oper) (X-indexed, indirect)
+        {
+            uint8_t index = (opcode[1] + cpu->x) & 0xff;
+            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            dcp(cpu, address);
             break;
         }
 
@@ -2005,6 +2199,12 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xc7:  // DCP $oper (zero-page)
+        {
+            dcp(cpu, opcode[1]);
+            break;
+        }
+
         case 0xc8:  // INY (implied)
         {
             iny(cpu);
@@ -2020,6 +2220,13 @@ int emulate6502Op(State6502 *cpu) {
         case 0xca:  // DEX (implied)
         {
             dex(cpu);
+            break;
+        }
+
+        case 0xcb:  // DCP Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            dcp(cpu, address);
             break;
         }
 
@@ -2044,6 +2251,14 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xcf:  // DCP // DEC $oper $oper (absolute)
+        {
+            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            dcp(cpu, address);
+            break;
+        }
+       
+       
         case 0xd0:  // BNE (relative)
         {
             if (cpu->sr.z == 0)
@@ -2056,6 +2271,24 @@ int emulate6502Op(State6502 *cpu) {
             uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
             uint16_t address = index + cpu->y;
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
+        case 0xd2:  // NOP
+        {
+            break;
+        }
+        
+        case 0xd3:  // DCP ($oper), Y (indirect, Y-indexed)
+        {
+            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
+            uint16_t address = index + cpu->y;
+            dcp(cpu, address);
+            break;
+        }
+
+        case 0xd4:  // NOP
+        {
             break;
         }
 
@@ -2083,6 +2316,18 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xd7:  // DCP $oper, X (zero-page, x-indexed)
+        {
+            uint8_t address;
+            if ((opcode[1] >> 7) & 1) {
+                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
+            } else {
+                address = (cpu->x + opcode[1]) & 0xff;
+            }
+            dcp(cpu, address);
+            break;
+        }
+
         case 0xd8:  // CLD (implied)
         {
             cpu->sr.d = 0;
@@ -2093,6 +2338,23 @@ int emulate6502Op(State6502 *cpu) {
         {
             uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
+        case 0xda:  // NOP
+        {
+            break;
+        }
+
+        case 0xdb:  // DCP Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            dcp(cpu, address);
+            break;
+        }
+
+        case 0xdc:  // NOP
+        {
             break;
         }
 
@@ -2110,6 +2372,14 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xdf:  // DCP X, $oper $oper (absolute, x-indexed)
+        {
+            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            dcp(cpu, address);
+            break;
+        }
+
+
         case 0xe0:  // CPX #$oper (immediate)
         {
             cmp(cpu, cpu->x, opcode[1]);
@@ -2121,6 +2391,19 @@ int emulate6502Op(State6502 *cpu) {
             uint8_t index = (opcode[1] + cpu->x) & 0xff;
             uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
+        case 0xe2:  // NOP
+        {
+            break;
+        }
+
+        case 0xe3:  // ISC (X, $oper) (X-indexed, indirect)
+        {
+            uint8_t index = (opcode[1] + cpu->x) & 0xff;
+            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            isc(cpu, address);
             break;
         }
 
@@ -2142,6 +2425,12 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xe7:  // ISC $oper (zero-page)
+        {
+            isc(cpu, opcode[1]);
+            break;
+        }
+
         case 0xe8:  // INX (implied)
         {
             inx(cpu);
@@ -2157,6 +2446,11 @@ int emulate6502Op(State6502 *cpu) {
         case 0xea:  // NOP (implied)
         {
             break;
+        }
+
+        case 0xeb:  // USBC #$oper (immediate)
+        {
+            sbc(cpu, opcode[1]);
         }
 
         case 0xec:  // CPX $oper $oper (absolute)
@@ -2180,6 +2474,14 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xef:  // ISC $oper $oper (absolute)
+        {
+            uint16_t address = (opcode[2] << 8) | opcode[1];
+            isc(cpu, address);
+            break;
+        }
+       
+       
         case 0xf0:  // BEQ $oper (relative)
         {
             if (cpu->sr.z == 1)
@@ -2192,6 +2494,24 @@ int emulate6502Op(State6502 *cpu) {
             uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
             uint16_t address = index + cpu->y;
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
+            break;
+        }
+
+        case 0xf2:  // JAM
+        {
+            break;
+        }
+
+        case 0xf3:  // ISC ($oper), Y (indirect, Y-indexed)
+        {
+            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
+            uint16_t address = index + cpu->y;
+            isc(cpu, address);
+            break;
+        }
+
+        case 0xf4:  // NOP 
+        {
             break;
         }
 
@@ -2219,6 +2539,18 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xf7:  // ISC $oper, X (zero-page, x-indexed)
+        {
+            uint8_t address;
+            if ((opcode[1] >> 7) & 1) {
+                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
+            } else {
+                address = (cpu->x + opcode[1]) & 0xff;
+            }
+            isc(cpu, address);
+            break;
+        }
+
         case 0xf8:  // SED (implied)
         {
             cpu->sr.d = 1;
@@ -2232,7 +2564,24 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
-        case 0xfd:  // SBC X, $oper $oper (absolute, y-indexed)
+        case 0xfa:  // NOP
+        {
+            break;
+        }
+
+        case 0xfb:  // ISC Y, $oper $oper (absolute, y-indexed)
+        {
+            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            isc(cpu, address);
+            break;
+        }
+
+        case 0xfc:  // NOP
+        {
+            break;
+        }
+
+        case 0xfd:  // SBC X, $oper $oper (absolute, x-indexed)
         {
             uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
@@ -2246,26 +2595,45 @@ int emulate6502Op(State6502 *cpu) {
             break;
         }
 
+        case 0xff:  // ISC X, $oper $oper (absolute, x-indexed)
+        {
+            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            isc(cpu, address);
+            break;
+        }
+
+
         default: {
-            printf("ERROR: UNIMPLEMENTED INSTRUCTION.\n");
-            return -1;
+            printf("ERROR: UNIMPLEMENTED INSTRUCTION %02x.\n", opcode[0]);
             break;
         }
     }
 
-    /* print out processor cpu */
-    if (FOR_CPUDIAG) {
-        printf("\tN=%d,V=%d,B=%d,D=%d,I=%d,Z=%d,C=%d\n", cpu->sr.n, cpu->sr.v,
-               cpu->sr.b, cpu->sr.d, cpu->sr.i, cpu->sr.z, cpu->sr.c);
-        printf("\tA $%02x X $%02x Y $%02x SP %04x PC %04x\n", cpu->a, cpu->x,
-               cpu->y, cpu->sp, cpu->pc);
-    }
-
-    if (add_bytes)
-        cpu->pc += OPCODES_BYTES[*opcode];
-
-    cpu->cycles += OPCODES_CYCLES[*opcode];
-    ppu_add_cycles(cpu->bus->ppu, OPCODES_CYCLES[*opcode] * 3);
-
+    // /* print out processor cpu */
+    // // if (FOR_CPUDIAG) {
+    // //     fprintf(log, "\tN=%d,V=%d,B=%d,D=%d,I=%d,Z=%d,C=%d\n", cpu->sr.n, cpu->sr.v,
+    // //            cpu->sr.b, cpu->sr.d, cpu->sr.i, cpu->sr.z, cpu->sr.c);
+    // //     fprintf(log, "\tA $%02x X $%02x Y $%02x SP %04x PC %04x\n", cpu->a, cpu->x,
+    // //            cpu->y, cpu->sp, cpu->pc);
+    // // }
+    
+    
+    
     return 0;
+}
+
+/**
+ * @brief perform one cpu clock cycle, update bytes and cycles
+ *
+ * @param cpu
+ */
+void clock_cpu(State6502 *cpu) {
+    if (cpu->cycles == 0) {
+        uint8_t opcode[3] = {cpu_read_from_bus(cpu->bus, cpu->pc), cpu_read_from_bus(cpu->bus, cpu->pc + 1), cpu_read_from_bus(cpu->bus, cpu->pc + 2)};
+        // printf("OPBYTES: %02x %02x %02x\n", opcode[0], opcode[1], opcode[2]);
+        emulate6502Op(cpu, opcode);
+        cpu->cycles = OPCODES_CYCLES[opcode[0]];
+        cpu->pc += OPCODES_BYTES[opcode[0]];
+    }
+    cpu->cycles--;
 }

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include "window.h"
 
-typedef struct Controller {
+typedef struct Control {
     bool nmi_enable;
     bool master_slave_select;
     bool sprite_height;
@@ -12,7 +12,7 @@ typedef struct Controller {
     bool vram_increment_mode;
     short nametable_select;
 
-} Controller;
+} Control;
 
 typedef struct Mask {
     bool blue;
@@ -56,7 +56,7 @@ typedef struct OAMdma {
 } OAMdma;
 
 typedef struct State2C02 {
-    Controller controller;
+    Control control;
     Mask mask;
     Status status;
     OAMaddr oamaddr;
@@ -73,6 +73,7 @@ typedef struct State2C02 {
     uint8_t data_buffer;
     uint16_t address;
     bool address_latch;
+    bool nmi;
 
     // BUS
     struct Bus *bus;
@@ -117,3 +118,25 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address);
  * @param window 
  */
 void render_pattern_tables(State2C02 *ppu, SDL_Window *window);
+
+/**
+ * @brief render all 4 nametables
+ * 
+ * @param ppu 
+ * @param window 
+ */
+void render_nametables(State2C02 *ppu, SDL_Window *window);
+
+/**
+ * @brief print nametables to file
+ * 
+ * @param ppu 
+ */
+void print_nametables(State2C02 *ppu);
+
+/**
+ * @brief execute one ppu cycle
+ * 
+ * @param ppu 
+ */
+void clock_ppu(State2C02 *ppu, SDL_Window *window);

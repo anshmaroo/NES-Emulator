@@ -7,6 +7,7 @@
 #include "src/6502.h"
 #include "src/bus.h"
 #include "src/window.h"
+#include "src/controller.h"
 
 /**
  * @brief load an NROM game's program rom and CHR-ROM
@@ -31,9 +32,12 @@ void loadROM(State6502 *cpu, char filename[]) {
     fread(buffer, fsize, 1, f);
     fclose(f);
 
+    
+
     // LOAD PROGRAM ROM
-    for (int i = 0; i < 0x6000; i++) {
+    for (int i = 0; i < 0x4000; i++) {
         cpu_write_to_bus(cpu->bus, 0xc000 + i, buffer[i + 0x10]);
+        
     }
 
     // LOAD CHR ROM
@@ -41,38 +45,47 @@ void loadROM(State6502 *cpu, char filename[]) {
         ppu_write_to_bus(cpu->bus, i, buffer[i + 0x4010]);
     }
 
-    // FILE *debug = fopen("debug.txt", "w+");
-
-    // for (int i = 0; i < 0x2000; i++) {
-    //     if (i != 0 && i % 16 == 0) {
-    //         fprintf(debug, "\n");
-    //     }
-    //     fprintf(debug, "%02x ", ppu_read_from_bus(cpu->bus, i));
-    // }
 }
 
 int main(int argc, char **argv) {
     State6502 *cpu = Init6502();
     State2C02 *ppu = Init2C02();
     Bus *bus = InitBus();
+    Controller *controller_1 = InitController();
+
+    cpu->bus = bus;
+    ppu->bus = bus;
+    controller_1->bus = bus;
 
     bus->cpu = cpu;
     bus->ppu = ppu;
-
-    ppu->bus = bus;
-    cpu->bus = bus;
+    bus->controller_1 = controller_1;
+    
 
     loadROM(cpu, argv[1]);  // load game's program rom and chr rom
+    
+    FILE *debug = fopen("debug.txt", "w+");
 
-    SDL_Window *window = create_window(argv[1], 128, 256);
+    for (int i = 0; i < 0x4000; i++) {
+        if(i != 0 && i % 16 == 0) {
+            fprintf(debug, "\n");
+        }
+        fprintf(debug, "%02x ", cpu_read_from_bus(bus, 0xc000 + i));
+    }
+    fclose(debug);
+
+    SDL_Window *window = create_window(argv[1], 256, 240);
+    
 
     if (!window) {
         printf("Failed to create window: %s\n", SDL_GetError());
         // Handle error appropriately
     }
 
-    SDL_ShowWindow(window);
 
+    
+    SDL_ShowWindow(window);
+    
     // Check if the window is shown
     if ((!SDL_GetWindowFlags(window)) & SDL_WINDOW_SHOWN) {
         printf("Failed to show window: %s\n", SDL_GetError());
@@ -82,12 +95,19 @@ int main(int argc, char **argv) {
     SDL_Event event;
     bool quit = false;
 
-    reset(cpu);  // set pc to reset vector
 
+    reset(cpu);
+    // cpu->pc = (0xc000);
+    
+    // int count = 1; 
+    uint8_t* pressed_keys = (uint8_t*)SDL_GetKeyboardState(NULL);
+	//  pass inputs
     while (!quit) {
-
-        render_pattern_tables(ppu, window);
-        emulate6502Op(cpu);
+        pressed_keys = (uint8_t*)SDL_GetKeyboardState(NULL);
+        
+        set_controller(controller_1, pressed_keys);
+        clock_bus(bus, window);
+        
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
@@ -97,17 +117,13 @@ int main(int argc, char **argv) {
                         free(ppu);
                         free(bus);
                         free(window);
-                        exit(0);
                 }
             }
         }
-
-        // Debug output to check if the surface is updated
-        // printf("Updating window surface\n");
-        SDL_UpdateWindowSurface(window);
+        
 
         // Add some delay to prevent busy-waiting
-        SDL_Delay(100);
+        // SDL_Delay(5);
     }
 
 
