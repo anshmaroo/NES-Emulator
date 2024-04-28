@@ -5,6 +5,9 @@
 
 /************************ CREATE OBJECT ************************/
 
+uint16_t stack_val = 0;
+uint8_t prev_sp = 0;
+
 /**
  * @brief creates a 6502 object
  *
@@ -255,8 +258,9 @@ static inline void cmp(State6502 *cpu, uint8_t register_value,
  * @param value the value to be pushed to the stack
  */
 static inline void push(State6502 *cpu, uint8_t value) {
-    cpu->sp -= 1;
-    cpu_write_to_bus(cpu->bus, (0x0100) | ((cpu->sp + 1) & 0xff), value);
+    cpu->sp--;
+    cpu_write_to_bus(cpu->bus, (0x0100) | (cpu->sp + 1), value);
+    stack_val = value;
 }
 
 /**
@@ -266,10 +270,10 @@ static inline void push(State6502 *cpu, uint8_t value) {
  * @param cpu
  */
 static uint8_t pop(State6502 *cpu) {
-    cpu->sp += 1;
-    uint8_t value = cpu_read_from_bus(cpu->bus, (0x0100) | cpu->sp);
-    // printf("POPPED %d FROM %d\n", value, cpu->sp - 1);
+    uint8_t value = cpu_read_from_bus(cpu->bus, (0x0100 | cpu->sp + 1));
+    cpu->sp++;
     return value;
+    
 }
 
 /**
@@ -280,13 +284,11 @@ static uint8_t pop(State6502 *cpu) {
  * @param value the value to be pushed to the stack
  */
 static inline void push_16(State6502 *cpu, uint16_t value) {
-    push(cpu, (value & 0xff00) >> 8);
-    push(cpu, (value & 0xff));
-    // printf("NOW ON STACK:\n");
-    // printf("\tcpu->ram[%d] = %d\n", ((0x0100) | (cpu->sp + 2)),
-    //        cpu_read_from_bus(cpu->bus, (0x0100) | (((cpu->sp + 2)) & 0xff)));
-    // printf("\tcpu->ram[%d] = %d\n", ((0x0100) | (cpu->sp + 1)),
-    //        cpu_read_from_bus(cpu->bus, (0x0100) | (((cpu->sp + 1)) & 0xff)));
+    push(cpu, value & 0xff);
+    // printf("PUSHED %02x TO %04X\n", value & 0xff, (0x100 | cpu->sp + 1));
+    push(cpu, (value >> 8) & 0xff);
+    // printf("PUSHED %02x TO %04X\n", (value >> 8) & 0xff, (0x100 | cpu->sp + 1));
+    stack_val = value;
 }
 
 /**
@@ -296,7 +298,11 @@ static inline void push_16(State6502 *cpu, uint16_t value) {
  * @param cpu the State6502 object
  */
 static uint16_t pop_16(State6502 *cpu) {
-    uint16_t value = pop(cpu) | (pop(cpu) << 8);
+    uint8_t high = pop(cpu);
+    // printf("POPPED %02x FROM %04X\n", high, (0x100 | cpu->sp));
+    uint8_t low = pop(cpu);
+    // printf("POPPED %02x FROM %04X\n", low, (0x100 | cpu->sp));
+    uint16_t value = (high << 8) | low;
     return value;
 }
 
@@ -1016,7 +1022,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         case 0x20:  // JSR $oper $oper (absolute)
         {
             push_16(cpu, cpu->pc + 2);
-
             uint16_t address = (opcode[2] << 8 | opcode[1]);
             cpu->pc = address;
             break;
@@ -1468,7 +1473,8 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         
         case 0x60:  // RTS (implied)
         {
-            cpu->pc = pop_16(cpu);
+            uint16_t address = pop_16(cpu);
+            cpu->pc = address;
             break;
         }
 
@@ -2609,13 +2615,13 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         }
     }
 
-    // /* print out processor cpu */
-    // // if (FOR_CPUDIAG) {
-    // //     fprintf(log, "\tN=%d,V=%d,B=%d,D=%d,I=%d,Z=%d,C=%d\n", cpu->sr.n, cpu->sr.v,
-    // //            cpu->sr.b, cpu->sr.d, cpu->sr.i, cpu->sr.z, cpu->sr.c);
-    // //     fprintf(log, "\tA $%02x X $%02x Y $%02x SP %04x PC %04x\n", cpu->a, cpu->x,
-    // //            cpu->y, cpu->sp, cpu->pc);
-    // // }
+    /* print out processor cpu */
+    if (FOR_CPUDIAG) {
+        printf("\tN=%d,V=%d,B=%d,D=%d,I=%d,Z=%d,C=%d\n", cpu->sr.n, cpu->sr.v,
+               cpu->sr.b, cpu->sr.d, cpu->sr.i, cpu->sr.z, cpu->sr.c);
+        printf("\tA $%02x X $%02x Y $%02x SP %04x PC %04x\n", cpu->a, cpu->x,
+               cpu->y, cpu->sp, cpu->pc);
+    }
     
     
     

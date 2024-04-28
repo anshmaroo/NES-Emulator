@@ -111,6 +111,10 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
             value |= ppu->control.sprite_tile_select << 3;
             value |= ppu->control.vram_increment_mode << 2;
             value |= ppu->control.nametable_select;
+
+            if(ppu->status.vblank && ppu->control.nmi_enable)
+                ppu->nmi = true;
+
             break;
 
         case 0x01:  // MASK
@@ -206,10 +210,9 @@ void render_pattern_tables(State2C02 *ppu, SDL_Window *window) {
  * @param window 
  */
 void render_nametables(State2C02 *ppu, SDL_Window *window) {
-    uint32_t colors[4] = {0x00000, 0x555555, 0xbbbbbb, 0xffffff};
-    
 
-    
+    uint8_t scale = SDL_GetWindowSurface(window)->w / 256;
+    uint32_t colors[4] = {0x00000, 0x555555, 0xbbbbbb, 0xffffff};
     uint16_t nametable_start = 0x2000 + ppu->control.nametable_select * 0x400;
     uint16_t pattern_table_start = ppu->control.background_tile_select * 0x1000;
 
@@ -226,10 +229,20 @@ void render_nametables(State2C02 *ppu, SDL_Window *window) {
                 
                 int tile_x = (index % 32);        // Tile's x position within the array
                 int tile_y = ((index - 0x2000) / 32);  // Tile's y position within the array
-                int x = tile_x * 8 + bit;                              // Calculate the x coordinate within the tile
-                int y = tile_y * 8 + (byte % 8);                           // Calculate the y coordinate within the tile
-               
+
+
+                // get pixel positions in the scaled tile
+                int x_start = tile_x * 8 * scale + bit * scale;           
+                int y_start = tile_y * 8 * scale + (byte % 8) * scale; 
+                int x = x_start;
+                int y = y_start;
+                // Render each scaled pixel
+                for (int i = 0; i < scale * scale; i++) {
+                x = x_start + (i % scale);
+                y = y_start + (i / scale);
                 set_pixel(window, x, y, colors[pixel]);
+            }
+            
                 
             }
         }
@@ -268,7 +281,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
     ppu->cycles++;
 
     if(ppu->cycles > 341) {
-        if(ppu->scanline == 261) {
+        if(ppu->scanline == 262) {
             ppu->scanline = 0;
         } 
         
@@ -293,7 +306,8 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         ppu->status.vblank = 1;
         if(ppu->control.nmi_enable)
             ppu->nmi = true;
-            printf("FRAME RENDERED!\n");
+            // printf("NMI!\n");
+        
         
         
         // print_nametables(ppu);

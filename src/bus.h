@@ -26,7 +26,8 @@ typedef struct Bus {
 
     // SYSTEM STATUS
     uint16_t system_cycles;
-    uint8_t poll_input;
+    int poll_input1;
+    int poll_input2;
 
 } Bus;
 

@@ -31,7 +31,14 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
         if (address == 0x4014)
             write_to_ppu_register(bus->ppu, address, value);
         else if(address == 0x4016) {
-            bus->poll_input = (value) ? 0 : -1;
+            // CONTROLLER
+            if((value & 0x1) == 1) {
+                bus->poll_input1 = -1;
+            }
+
+            else if ((value & 0x1) == 0){
+                bus->poll_input1 = 0;
+            }
         }
         else {
             address &= 0x0017;
@@ -66,14 +73,20 @@ uint8_t cpu_read_from_bus(Bus *bus, uint16_t address) {
         }
 
         else if (address == 0x4016) {
-            if(bus->poll_input >= 0) {
-                uint8_t value = read_from_controller(bus->controller_1, bus->poll_input++);
-                if(bus->poll_input > 7)
-                    bus->poll_input = -1;
-                value = value | 0x40; 
-                // printf("VALUE: %02x\n", value);
+
+            if(bus->poll_input1 >= 0) {
+                uint8_t value = read_from_controller(bus->controller_1, bus->poll_input1++);
+                if(bus->poll_input1 > 7)
+                    bus->poll_input1 = -1;
+                value = 0x40 | (value); 
+                // printf("NO STROBE READ = %02x\n", value);
             }
-            value = 0x40;
+            
+            else if (bus->poll_input1 == -1) {
+                value = 0x40 | read_from_controller(bus->controller_1, 0);
+                // printf("STROBE READ = %02x\n", value);
+            }
+            
 
         }
         else {
@@ -205,7 +218,8 @@ Bus *InitBus(void) {
     bus->ppu = NULL;
 
     bus->system_cycles = 0;
-    bus->poll_input = 0;
+    bus->poll_input1 = 0;
+    bus->poll_input2 = 0;
 
     return bus;
 }

@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
     }
     fclose(debug);
 
-    SDL_Window *window = create_window(argv[1], 256, 240);
+    SDL_Window *window = create_window(argv[1], 512, 480);
     
 
     if (!window) {
@@ -97,33 +97,36 @@ int main(int argc, char **argv) {
 
 
     reset(cpu);
-    // cpu->pc = (0xc000);
     
-    // int count = 1; 
     uint8_t* pressed_keys = (uint8_t*)SDL_GetKeyboardState(NULL);
-	//  pass inputs
+
+	
     while (!quit) {
-        pressed_keys = (uint8_t*)SDL_GetKeyboardState(NULL);
-        
+
+        pressed_keys = (uint8_t*) SDL_GetKeyboardState(NULL);
         set_controller(controller_1, pressed_keys);
+        
         clock_bus(bus, window);
         
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_KEYDOWN) {
-                switch (event.key.keysym.sym) {
-                    case SDLK_q:
-                        quit = true;
-                        free(cpu);
-                        free(ppu);
-                        free(bus);
-                        free(window);
+        if(ppu->scanline == 241 && ppu->cycles == 1) {
+            while (SDL_PollEvent(&event)) {
+                if (event.type == SDL_KEYDOWN) {
+                    switch (event.key.keysym.sym) {
+                        case SDLK_q:
+                            quit = true;
+                            free(cpu);
+                            free(ppu);
+                            free(bus);
+                            free(window);
+                    }
                 }
             }
+            
         }
         
-
-        // Add some delay to prevent busy-waiting
-        // SDL_Delay(5);
+        
+        
+        
     }
 
 
