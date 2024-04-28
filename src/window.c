@@ -1,5 +1,5 @@
 #include "window.h"
-
+#include <stdio.h>
 /**
  * @brief initializes video
  * 

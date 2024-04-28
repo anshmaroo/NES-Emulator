@@ -1,5 +1,6 @@
 #include "2C02.h"
 #include "bus.h"
+#include <stdio.h>
 
 State2C02 *Init2C02() {
     State2C02 *state = malloc(sizeof(State2C02));
