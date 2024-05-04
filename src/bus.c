@@ -2,13 +2,6 @@
 #include "controller.h"
 #include "2C02.h"
 #include "6502.h"
-#include <stdio.h>
-
-const int GLOBAL_COLORS[0x40] = {
-    0x626262, 0x001fb2, 0x2404c8, 0x5200b2, 0x730076, 0x800024, 0x730b00, 0x522800, 0x244400, 0x005700, 0x005700, 0x005700, 0x003C76, 0x000000, 0x000000, 0x000000,
-    0xABABAB, 0x0D57FF, 0x4B30FF, 0x8A13FF, 0xBC08D6, 0xD21269, 0xC72E00, 0x9D5400, 0x607B00, 0x209800, 0x00A300, 0x009942, 0x007DB4, 0x000000, 0x000000, 0x000000,
-    0xFFFFFF, 0x53AEFF, 0x9085FF, 0xD365FF, 0xFF57FF, 0xFF5DCF, 0xFF7757, 0xFA9E00, 0xBDC700, 0x7AE700, 0x43F611, 0x26EF7E, 0x2CD5F6, 0x4E4E4E, 0x000000, 0x000000
-};
 
 void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     if (address <= 0x1fff) {
@@ -73,13 +66,14 @@ uint8_t cpu_read_from_bus(Bus *bus, uint16_t address) {
         }
 
         else if (address == 0x4016) {
-
+            
+            bool bit = 0;
             if(bus->poll_input1 >= 0) {
-                uint8_t value = read_from_controller(bus->controller_1, bus->poll_input1++);
+                bit = read_from_controller(bus->controller_1, bus->poll_input1++);
                 if(bus->poll_input1 > 7)
                     bus->poll_input1 = -1;
-                value = 0x40 | (value); 
-                // printf("NO STROBE READ = %02x\n", value);
+                value = 0x40 | bit; 
+                // printf("INPUT VALUE = %02x\n", value);
             }
             
             else if (bus->poll_input1 == -1) {
@@ -137,6 +131,7 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
         address &= 0x001f;
+        bus->palette[address] = value;
         // GLOBAL_PALETTE[address] = value;
     }
 }
@@ -173,8 +168,9 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
     }
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
-        address &= 0x003f;
-        value = GLOBAL_COLORS[address];
+        address &= 0x001f;
+        value = bus->palette[address];
+        // printf("PALETTE VALUE = %04x\n", address);
     }
 
     return value;
@@ -212,6 +208,7 @@ Bus *InitBus(void) {
     bus->name_table_1 = malloc(0x0400);
     bus->name_table_2 = malloc(0x0400);
     bus->name_table_3 = malloc(0x0400);
+    bus->palette = malloc(0x20);
     
 
     bus->cpu = NULL;

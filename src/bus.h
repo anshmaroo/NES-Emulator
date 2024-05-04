@@ -15,7 +15,7 @@ typedef struct Bus {
     uint8_t *name_table_1;     // $2400-$27FF
     uint8_t *name_table_2;     // $2800-$2BFF
     uint8_t *name_table_3;     // $2C00-$2FFF
-    // uint16_t *palette;         // $3F00-$3F1F
+    uint8_t *palette;         // $3F00-$3F1F
 
     // DEVICES
     struct State6502 *cpu;

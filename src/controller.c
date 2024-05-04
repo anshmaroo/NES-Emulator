@@ -58,9 +58,10 @@ void set_controller(Controller *controller, uint8_t *pressed_keys) {
         controller->a = 1;
     if(pressed_keys[SDL_SCANCODE_MINUS]) 
         controller->select = 1;
-    if(pressed_keys[SDL_SCANCODE_EQUALS]) 
+    if(pressed_keys[SDL_SCANCODE_RETURN]) {
+        // printf("START PRESSED!\n");
         controller->start = 1;
-
+    }
 }
 
 /**
