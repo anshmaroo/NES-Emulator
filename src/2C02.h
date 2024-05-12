@@ -54,6 +54,19 @@ typedef struct OAMdma {
     uint8_t address_high_byte;
 } OAMdma;
 
+typedef union loopy_register {
+    struct  {
+        uint16_t coarse_x : 5;
+        uint16_t coarse_y : 5;
+        uint16_t nametable_y : 1;
+        uint16_t nametable_x : 1;
+        uint16_t fine_y : 3; 
+        uint16_t unused : 1;
+    };
+
+    uint16_t reg;
+} loopy_register;
+
 typedef struct State2C02 {
     Control control;
     Mask mask;
@@ -65,13 +78,48 @@ typedef struct State2C02 {
     PPUdata ppudata;
     OAMdma oamdma;
 
+    // INTERNAL REGISTERS
+    loopy_register vram_address;
+    loopy_register tram_address;
+    uint8_t fine_x;
+    bool w;
+
+
+    // OAM
+    uint8_t *primary_oam;      // SPRITE DATA (256 bytes)
+    uint8_t *secondary_oam;    // SPRITE DATA (32 bytes)
+
+    // OAMDMA
+    bool oamdma_write;
+    int oamdma_clock;
+
     
     // PPU STATUS
-    uint16_t scanline;
-    uint16_t cycles;
+    int scanline;
+    int cycles;
+
     uint8_t data_buffer;
-    uint16_t address;
-    bool address_latch;
+
+    // background rendering
+    uint8_t bg_next_tile_index;
+    uint8_t bg_next_tile_attribute;
+    uint8_t bg_next_tile_lsb;
+    uint8_t bg_next_tile_msb;
+
+    uint16_t bg_shifter_pattern_lo;
+    uint16_t bg_shifter_pattern_hi;
+    uint16_t bg_shifter_attribute_lo;
+    uint16_t bg_shifter_attribute_hi;
+
+    // sprite rendering
+    uint8_t sprite_count;
+
+    uint8_t primary_oam_address;
+    uint8_t secondary_oam_address;
+
+    uint8_t *sprite_shifter_pattern_lo;
+    uint8_t *sprite_shifter_pattern_hi;
+
     bool nmi;
 
     // BUS
@@ -93,6 +141,8 @@ State2C02 *Init2C02();
  */
 void ppu_add_cycles(State2C02 *ppu, uint8_t count);
 
+
+
 /**
  * @brief write to ppu register
  * 
@@ -110,6 +160,16 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value);
  * @return uint8_t 
  */
 uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address);
+
+
+void write_to_primary_oam(State2C02 *ppu, uint8_t address, uint8_t value);
+
+uint8_t read_from_primary_oam(State2C02 *ppu, uint8_t address);
+
+void write_to_secondary_oam(State2C02 *ppu, uint8_t address, uint8_t value);
+
+uint8_t read_from_secondary_oam(State2C02 *ppu, uint8_t address);
+
 
 /**
  * @brief render pattern tables to window
@@ -132,6 +192,63 @@ void render_nametables(State2C02 *ppu, SDL_Window *window);
  * @param ppu 
  */
 void print_nametables(State2C02 *ppu);
+
+
+
+/**
+ * @brief increases vram x position and switches to next nametable if necessary
+ * 
+ * @param ppu 
+ */
+void increment_scroll_x(State2C02 * ppu);
+
+/**
+ * @brief increases vram y position and switches to next nametable if necessary
+ * 
+ * @param ppu 
+ */
+void increment_scroll_y(State2C02 * ppu);
+
+
+
+/**
+ * @brief transfer x address from tram to vram
+ * 
+ * @param ppu 
+ */
+void transfer_address_x(State2C02 *ppu);
+
+/**
+ * @brief transfer y address from tram to vram
+ * 
+ * @param ppu 
+ */
+void transfer_address_y(State2C02 *ppu);
+
+
+
+/**
+ * @brief loads background "shift registers"
+ * 
+ * @param ppu 
+ */
+void load_background_shifters(State2C02 *ppu);
+
+/**
+ * @brief shifts background "shift registers" by one bit
+ * 
+ * @param ppu 
+ */
+void update_background_shifters(State2C02 *ppu);
+
+
+/**
+ * @brief shifts sprite "shift registers" by one bit
+ * 
+ * @param ppu 
+ */
+void update_sprite_shifters(State2C02 *ppu);
+
 
 /**
  * @brief execute one ppu cycle

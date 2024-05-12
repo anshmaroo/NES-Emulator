@@ -3,6 +3,7 @@
 #include "2C02.h"
 #include "6502.h"
 
+
 void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     if (address <= 0x1fff) {
         // CPU RAM
@@ -99,6 +100,7 @@ uint8_t cpu_read_from_bus(Bus *bus, uint16_t address) {
     return value;
 }
 
+
 void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     if (address <= 0x0fff) {
         bus->pattern_table_0[address] = value;
@@ -176,18 +178,21 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
     return value;
 }
 
+
+
 void clock_bus(Bus *bus, SDL_Window *window) {
     clock_ppu(bus->ppu, window);
     // printf("ppu->scanline = %d\n", bus->ppu->scanline);
     // printf("ppu->cycles = %d\n", bus->ppu->cycles);
-    if (bus->system_cycles % 3 == 0) {
+    if (bus->system_cycles % 3 == 0 && !bus->ppu->oamdma_write) {
         clock_cpu(bus->cpu);
     }
 
-    if (bus->ppu->nmi) {
+
+    if (bus->ppu->nmi && !bus->ppu->oamdma_write) {
         bus->ppu->nmi = false;
         nmi(bus->cpu);
-        
+        // render_nametables(bus->ppu, window);
     }
 
     bus->system_cycles++;
@@ -215,6 +220,7 @@ Bus *InitBus(void) {
     bus->ppu = NULL;
 
     bus->system_cycles = 0;
+    
     bus->poll_input1 = 0;
     bus->poll_input2 = 0;
 

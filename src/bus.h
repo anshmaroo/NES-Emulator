@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct Bus {
     // CPU ADDRESSES
@@ -15,7 +16,9 @@ typedef struct Bus {
     uint8_t *name_table_1;     // $2400-$27FF
     uint8_t *name_table_2;     // $2800-$2BFF
     uint8_t *name_table_3;     // $2C00-$2FFF
-    uint8_t *palette;         // $3F00-$3F1F
+    uint8_t *palette;          // $3F00-$3F1F
+
+    
 
     // DEVICES
     struct State6502 *cpu;
@@ -26,6 +29,7 @@ typedef struct Bus {
 
     // SYSTEM STATUS
     uint16_t system_cycles;
+
     int poll_input1;
     int poll_input2;
 
@@ -35,9 +39,11 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value);
 
 uint8_t cpu_read_from_bus(Bus *bus, uint16_t address);
 
+
 void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value);
 
 uint8_t ppu_read_from_bus(Bus *bus, uint16_t address);
+
 
 void clock_bus(Bus *bus, SDL_Window *window);
 

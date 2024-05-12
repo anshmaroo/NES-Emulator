@@ -6,8 +6,8 @@
 #include "src/2C02.h"
 #include "src/6502.h"
 #include "src/bus.h"
-#include "src/window.h"
 #include "src/controller.h"
+#include "src/window.h"
 
 /**
  * @brief load an NROM game's program rom and CHR-ROM
@@ -32,19 +32,15 @@ void loadROM(State6502 *cpu, char filename[]) {
     fread(buffer, fsize, 1, f);
     fclose(f);
 
-    
-
     // LOAD PROGRAM ROM
     for (int i = 0; i < 0x4000; i++) {
         cpu_write_to_bus(cpu->bus, 0xc000 + i, buffer[i + 0x10]);
-        
     }
 
     // LOAD CHR ROM
     for (int i = 0; i < 0x2000; i++) {
         ppu_write_to_bus(cpu->bus, i, buffer[i + 0x4010]);
     }
-
 }
 
 int main(int argc, char **argv) {
@@ -60,32 +56,18 @@ int main(int argc, char **argv) {
     bus->cpu = cpu;
     bus->ppu = ppu;
     bus->controller_1 = controller_1;
-    
 
     loadROM(cpu, argv[1]);  // load game's program rom and chr rom
-    
-    FILE *debug = fopen("debug.txt", "w+");
-
-    for (int i = 0; i < 0x4000; i++) {
-        if(i != 0 && i % 16 == 0) {
-            fprintf(debug, "\n");
-        }
-        fprintf(debug, "%02x ", cpu_read_from_bus(bus, 0xc000 + i));
-    }
-    fclose(debug);
 
     SDL_Window *window = create_window(argv[1], 512, 480);
-    
 
     if (!window) {
         printf("Failed to create window: %s\n", SDL_GetError());
         // Handle error appropriately
     }
 
-
-    
     SDL_ShowWindow(window);
-    
+
     // Check if the window is shown
     if ((!SDL_GetWindowFlags(window)) & SDL_WINDOW_SHOWN) {
         printf("Failed to show window: %s\n", SDL_GetError());
@@ -95,20 +77,20 @@ int main(int argc, char **argv) {
     SDL_Event event;
     bool quit = false;
 
-
     reset(cpu);
-    
-    uint8_t* pressed_keys = (uint8_t*)SDL_GetKeyboardState(NULL);
 
-	
+    uint8_t *pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
+
+    unsigned int a = SDL_GetTicks();
+    unsigned int b = SDL_GetTicks();
+    double delta = 0;
+
     while (!quit) {
-
-        pressed_keys = (uint8_t*) SDL_GetKeyboardState(NULL);
+        pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
         set_controller(controller_1, pressed_keys);
-        
         clock_bus(bus, window);
-        
-        if(ppu->scanline == 241 && ppu->cycles == 1) {
+
+        if (ppu->scanline == 241 && ppu->cycles == 1) {
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_KEYDOWN) {
                     switch (event.key.keysym.sym) {
@@ -121,14 +103,15 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-            
-        }
-        
-        
-        
-        
-    }
 
+            // printf("fps: %f\n", (1000 / delta));
+            b = a;
+            SDL_UpdateWindowSurface(window);
+
+            a = SDL_GetTicks();
+            delta = a - b;
+        }
+    }
 
     return 0;
 }
