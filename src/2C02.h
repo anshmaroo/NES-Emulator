@@ -67,6 +67,14 @@ typedef union loopy_register {
     uint16_t reg;
 } loopy_register;
 
+typedef struct Sprite {
+    uint8_t y;
+    uint8_t tile_index;
+    uint8_t attributes;
+    uint8_t x;
+} Sprite;
+
+
 typedef struct State2C02 {
     Control control;
     Mask mask;
@@ -86,8 +94,14 @@ typedef struct State2C02 {
 
 
     // OAM
-    uint8_t *primary_oam;      // SPRITE DATA (256 bytes)
-    uint8_t *secondary_oam;    // SPRITE DATA (32 bytes)
+    Sprite *primary_oam;      // SPRITE DATA (256 bytes)
+    Sprite *secondary_oam;    // SPRITE DATA (32 bytes)
+    uint8_t n;
+
+    // sprite rendering
+    uint8_t sprite_count;
+    uint8_t *sprite_shifter_pattern_lo;
+    uint8_t *sprite_shifter_pattern_hi;
 
     // OAMDMA
     bool oamdma_write;
@@ -111,14 +125,7 @@ typedef struct State2C02 {
     uint16_t bg_shifter_attribute_lo;
     uint16_t bg_shifter_attribute_hi;
 
-    // sprite rendering
-    uint8_t sprite_count;
-
-    uint8_t primary_oam_address;
-    uint8_t secondary_oam_address;
-
-    uint8_t *sprite_shifter_pattern_lo;
-    uint8_t *sprite_shifter_pattern_hi;
+   
 
     bool nmi;
 
@@ -160,15 +167,6 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value);
  * @return uint8_t 
  */
 uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address);
-
-
-void write_to_primary_oam(State2C02 *ppu, uint8_t address, uint8_t value);
-
-uint8_t read_from_primary_oam(State2C02 *ppu, uint8_t address);
-
-void write_to_secondary_oam(State2C02 *ppu, uint8_t address, uint8_t value);
-
-uint8_t read_from_secondary_oam(State2C02 *ppu, uint8_t address);
 
 
 /**

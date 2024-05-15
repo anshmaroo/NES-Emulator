@@ -7,8 +7,17 @@
  * @return Controller* 
  */
 Controller *InitController() {
-    Controller *controller = malloc(sizeof(controller));
+    Controller *controller = (Controller *) malloc(sizeof(controller));
+    controller->left = false;
+    controller->right = false;
+    controller->up = false;
+    controller->down = false;
 
+    controller->a = false;
+    controller->b = false;
+    
+    controller->select = false;
+    controller->start = false;
     controller->bus = NULL;
 
     reset_controller(controller);
@@ -22,16 +31,16 @@ Controller *InitController() {
  * @param controller 
  */
 void reset_controller(Controller *controller) {
-    controller->left = 0;
-    controller->right = 0;
-    controller->up = 0;
-    controller->down = 0;
+    controller->left = false;
+    controller->right = false;
+    controller->up = false;
+    controller->down = false;
 
-    controller->a = 0;
-    controller->b = 0;
+    controller->a = false;
+    controller->b = false;
     
-    controller->select = 0;
-    controller->start = 0;
+    controller->select = false;
+    controller->start = false;
 
 }
 

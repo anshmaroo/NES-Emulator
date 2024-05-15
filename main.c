@@ -81,14 +81,15 @@ int main(int argc, char **argv) {
 
     uint8_t *pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
 
-    unsigned int a = SDL_GetTicks();
-    unsigned int b = SDL_GetTicks();
+    unsigned int a = SDL_GetTicks64();
+    unsigned int b = SDL_GetTicks64();
     double delta = 0;
 
     while (!quit) {
         pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
         set_controller(controller_1, pressed_keys);
-        clock_bus(bus, window);
+        if((1000 / delta) <= 60)
+            clock_bus(bus, window);
 
         if (ppu->scanline == 241 && ppu->cycles == 1) {
             while (SDL_PollEvent(&event)) {
@@ -99,16 +100,21 @@ int main(int argc, char **argv) {
                             free(cpu);
                             free(ppu);
                             free(bus);
+                            free(controller_1);
                             free(window);
                     }
                 }
             }
 
-            // printf("fps: %f\n", (1000 / delta));
-            b = a;
-            SDL_UpdateWindowSurface(window);
+            
 
-            a = SDL_GetTicks();
+            if ((1000 / delta) <= 60) {
+                printf("%d FPS\n", (int)(1000 / delta));
+                SDL_UpdateWindowSurface(window);
+                b = SDL_GetTicks64();
+            }   
+
+            a = SDL_GetTicks64();
             delta = a - b;
         }
     }
