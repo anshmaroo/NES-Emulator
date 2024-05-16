@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 
-#define FOR_CPUDIAG false
+#define DEBUG false
 
 
 static const uint8_t OPCODES_CYCLES[256] = {

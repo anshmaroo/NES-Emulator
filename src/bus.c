@@ -40,7 +40,7 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     }
 
     else if (address >= 0x4020 && address <= 0xffff) {
-        // UNALLOCATED (CARTRIDGE RAM/ROM)
+        // UNALLOCATED (CARTRIDGE RAM/ROM
         address -= 0x4020;
         bus->unmapped[address] = value;
     }
@@ -185,7 +185,7 @@ void clock_bus(Bus *bus, SDL_Window *window) {
     if (bus->ppu->nmi && !bus->ppu->oamdma_write) {
         bus->ppu->nmi = false;
         nmi(bus->cpu);
-        // render_nametables(bus->ppu, window);
+
     }
 
     bus->system_cycles++;

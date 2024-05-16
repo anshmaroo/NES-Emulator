@@ -782,7 +782,7 @@ static inline void isc(State6502 *cpu, uint16_t address) {
 int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
     
-    if (FOR_CPUDIAG)
+    if (DEBUG)
         Disassemble6502Op(opcode, cpu->pc);
 
     switch (*opcode) {
@@ -973,7 +973,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        case 0x19:  // or_a Y, $oper $oper (absolute, y-indexed)
+        case 0x19:  // ORA Y, $oper $oper (absolute, y-indexed)
         {
             uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
             or_a(cpu, cpu_read_from_bus(cpu->bus, address));
@@ -2616,7 +2616,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
     }
 
     /* print out processor cpu */
-    if (FOR_CPUDIAG) {
+    if (DEBUG) {
         printf("\tN=%d,V=%d,B=%d,D=%d,I=%d,Z=%d,C=%d\n", cpu->sr.n, cpu->sr.v,
                cpu->sr.b, cpu->sr.d, cpu->sr.i, cpu->sr.z, cpu->sr.c);
         printf("\tA $%02x X $%02x Y $%02x SP %04x PC %04x\n", cpu->a, cpu->x,

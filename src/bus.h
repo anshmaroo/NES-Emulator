@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifndef BUS_H
+#define BUS_H
 typedef struct Bus {
     // CPU ADDRESSES
     uint8_t *cpu_ram;           // $0000–$07FF, mirrored until $1FFF
@@ -28,12 +30,13 @@ typedef struct Bus {
 
 
     // SYSTEM STATUS
-    uint16_t system_cycles;
+    uint32_t system_cycles;
 
     int poll_input1;
     int poll_input2;
 
 } Bus;
+#endif
 
 void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value);
 
