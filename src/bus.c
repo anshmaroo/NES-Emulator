@@ -1,5 +1,4 @@
 #include "bus.h"
-
 #include "2C02.h"
 #include "6502.h"
 #include "controller.h"
@@ -41,6 +40,9 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
 
     else if (address >= 0x4020 && address <= 0xffff) {
         // UNALLOCATED (CARTRIDGE RAM/ROM
+        // if (address >= 0xfffa && address <= 0xfffd) {
+        //     printf("WRITING $%02x to $%04x\n", value, address);
+        // }
         address -= 0x4020;
         bus->unmapped[address] = value;
     }
@@ -185,6 +187,7 @@ void clock_bus(Bus *bus, SDL_Window *window) {
     if (bus->ppu->nmi && !bus->ppu->oamdma_write) {
         bus->ppu->nmi = false;
         nmi(bus->cpu);
+        // print_nametables(bus->ppu);
 
     }
 

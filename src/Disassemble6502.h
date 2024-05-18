@@ -8,4 +8,4 @@
  * @param pc 
  * @return int 
  */
-int Disassemble6502Op(uint8_t *codebuffer, int pc);
+char *Disassemble6502Op(uint8_t *codebuffer, int pc);

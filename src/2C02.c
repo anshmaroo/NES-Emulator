@@ -65,6 +65,7 @@ uint8_t flip_byte(uint8_t byte) {
  * @param value
  */
 void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
+    ppu->io_db = value;
     switch (address) {
         case 0x00:  // control
             ppu->control.nmi_enable = ((value) >> 7) & 0x1;
@@ -89,6 +90,7 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
             ppu->mask.sprite_left_column_enable = ((value) >> 2) & 0x1;
             ppu->mask.background_left_column_enable = ((value) >> 1) & 0x1;
             ppu->mask.grayscale = value & 0x1;
+
             break;
 
         case 0x02:  // STATUS
@@ -140,7 +142,7 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
             // getchar();
 
             if (ppu->w == 0) {
-                ppu->tram_address.reg = ((value & 0x3F) << 8) | (ppu->tram_address.reg & 0x00FF);
+                ppu->tram_address.reg = (uint16_t)((value & 0x3F) << 8) | (ppu->tram_address.reg & 0x00FF);
                 ppu->w = 1;
             }
 
@@ -156,7 +158,7 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
             ppu->ppudata.data = value;
             ppu_write_to_bus(ppu->bus, ppu->vram_address.reg, value);
 
-            ppu->vram_address.reg += (ppu->control.vram_increment_mode == 1) ? 32 : 1;
+            ppu->vram_address.reg += ppu->control.vram_increment_mode ? 32 : 1;
             ppu->vram_address.reg &= 0x3fff;
             break;
 
@@ -178,42 +180,27 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
     uint8_t value = 0;
     switch (address) {
         case 0x00:  // control
-            value |= ppu->control.nmi_enable << 7;
-            value |= ppu->control.master_slave_select << 6;
-            value |= ppu->control.sprite_height << 5;
-            value |= ppu->control.background_tile_select << 4;
-            value |= ppu->control.sprite_tile_select << 3;
-            value |= ppu->control.vram_increment_mode << 2;
-            value |= ppu->control.nametable_select;
-
-            if (ppu->status.vblank && ppu->control.nmi_enable)
-                ppu->nmi = true;
-
+            value = ppu->io_db;
             break;
 
         case 0x01:  // MASK
-            value |= ppu->mask.blue << 7;
-            value |= ppu->mask.green << 6;
-            value |= ppu->mask.red << 5;
-            value |= ppu->mask.sprite_enable << 4;
-            value |= ppu->mask.background_enable << 3;
-            value |= ppu->mask.sprite_left_column_enable << 2;
-            value |= ppu->mask.background_left_column_enable << 1;
-            value |= ppu->mask.grayscale;
+            value = ppu->io_db;
             break;
 
         case 0x02:  // STATUS
             value |= ppu->status.vblank << 7;
             value |= ppu->status.sprite_0_hit << 6;
             value |= ppu->status.sprite_overflow << 5;
-            value |= ppu->data_buffer & 0x1f;
+            value |= ppu->io_db & 0x1f;
 
             ppu->status.vblank = 0;
             ppu->w = 0;
+
+
             break;
 
         case 0x03:  // OAMADDR
-            value = ppu->oamaddr.address;
+            value = ppu->io_db;
             break;
 
         case 0x04:  // OAMDATA
@@ -221,30 +208,36 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
             break;
 
         case 0x05:  // PPUSCROLL
-            value = ppu->ppuscroll.scroll;
+            value = ppu->io_db;
             break;
 
         case 0x06:  // PPUADDR
+            value = ppu->io_db;
             break;
 
         case 0x07:  // PPUDATA
             value = ppu->data_buffer;
-            ppu->data_buffer = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
-
-            if (ppu->vram_address.reg >= 0x3f00)
-                value = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
-
+            ppu->data_buffer = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);  
+            if (ppu->vram_address.reg >= 0x3f00) value = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
             ppu->vram_address.reg += (ppu->control.vram_increment_mode == 1) ? 32 : 1;
-            ppu->vram_address.reg &= 0x3fff;
 
             break;
 
-        case 0x4014:  // OAMDMA
-            value = ppu->oamdma.address_high_byte;
-            break;
+        
     }
 
+    ppu->io_db = value;
     return value;
+}
+
+/**
+ * @brief set the mirror mode
+ * 
+ * @param ppu 
+ * @param mirror_mode 
+ */
+void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode) {
+    ppu->mirror_mode = mirror_mode;
 }
 
 /**
@@ -335,7 +328,7 @@ void render_nametables(State2C02 *ppu, SDL_Window *window) {
 void print_nametables(State2C02 *ppu) {
     FILE *d = fopen("nametable.txt", "w+");
 
-    int nametable_start = 0x2000 + ppu->control.nametable_select * 0x400;
+    int nametable_start = 0x2000 + 0x400;
     for (int i = nametable_start; i < nametable_start + 0x400; i++) {
         if (i % 32 == 0 && i > 0)
             fprintf(d, "\n");
@@ -355,7 +348,9 @@ void increment_scroll_x(State2C02 *ppu) {
         if (ppu->vram_address.coarse_x == 31) {
             ppu->vram_address.coarse_x = 0;
             ppu->vram_address.nametable_x = ~ppu->vram_address.nametable_x;
-        } else {
+        } 
+        
+        else {
             ppu->vram_address.coarse_x++;
         }
     }
@@ -377,9 +372,13 @@ void increment_scroll_y(State2C02 *ppu) {
                 ppu->vram_address.coarse_y = 0;
 
                 ppu->vram_address.nametable_y = ~ppu->vram_address.nametable_y;
-            } else if (ppu->vram_address.coarse_y == 31) {
+            }
+            
+            else if (ppu->vram_address.coarse_y == 31) {
                 ppu->vram_address.coarse_y = 0;
-            } else {
+            } 
+            
+            else {
                 ppu->vram_address.coarse_y++;
             }
         }
@@ -682,6 +681,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                 y = y_start + (i / scale);
                 set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, palette_address)]);
             }
+            // printf("rendering bg\n");
         }
 
         uint8_t sprite_pixel = 0x00;

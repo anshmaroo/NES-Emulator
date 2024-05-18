@@ -17,6 +17,13 @@ bool init_SDL()
         return false;
     }
 
+    if (TTF_Init() < 0)
+    {
+        fprintf(stderr, "Could not initialize TTF: %s\n", TTF_GetError());
+        exit(0);
+        return false;
+    }
+
     // if (SDL_Init(SDL_INIT_AUDIO) < 0)
     // {
     //     fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
@@ -32,13 +39,13 @@ bool init_SDL()
  * 
  * @return SDL_Window* 
  */
-SDL_Window *create_window(char *title, int width, int height) {
+SDL_Window *create_window(char *title, int x, int width, int height) {
     int window_width = width;
     int window_height = height;
 
     SDL_Window *new_window = SDL_CreateWindow(
         title, 
-        SDL_WINDOWPOS_CENTERED,
+        x,
         SDL_WINDOWPOS_CENTERED,
         window_width,
         window_height,

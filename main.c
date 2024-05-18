@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 #include "src/2C02.h"
 #include "src/6502.h"
@@ -10,6 +9,9 @@
 #include "src/controller.h"
 #include "src/mappers.h"
 #include "src/window.h"
+
+#define WIDTH 512
+#define HEIGHT 480
 
 #define FPS 60
 
@@ -27,9 +29,15 @@ int main(int argc, char **argv) {
     bus->ppu = ppu;
     bus->controller_1 = controller_1;
 
-    nrom(bus, argv[1]);  // load game's program rom and chr rom
+    // load game's program rom and chr rom
+    nrom(bus, argv[1]);
 
-    SDL_Window *window = create_window(argv[1], 512, 480);
+    // set up SDL
+    init_SDL();
+    SDL_Window *window = create_window(argv[1], SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT);
+
+    SDL_Event event;
+    bool quit = false;
 
     if (!window) {
         printf("Failed to create window: %s\n", SDL_GetError());
@@ -44,19 +52,19 @@ int main(int argc, char **argv) {
         // Handle error appropriately
     }
 
-    SDL_Event event;
-    bool quit = false;
-
-    reset(cpu);
-
+    // initialize input
     uint8_t *pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
 
+    // reset cpu
+    reset(cpu);
+
+    // initialize timers
     double start = SDL_GetTicks64();
     double end = SDL_GetTicks64();
     double delta = 0;
+    
 
     while (!quit) {
-
         end = SDL_GetTicks64();
         delta = end - start;
 
@@ -64,14 +72,17 @@ int main(int argc, char **argv) {
             end = SDL_GetTicks64();
             delta = end - start;
         }
+
+            clock_bus(bus, window);
         
-        // clock game logic
-        clock_bus(bus, window);
 
         // read input and redner
         pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
         set_controller(controller_1, pressed_keys);
         if (ppu->scanline == 241 && ppu->cycles == 1) {
+            SDL_UpdateWindowSurface(window);
+            start = SDL_GetTicks64();
+
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_KEYDOWN) {
                     switch (event.key.keysym.sym) {
@@ -82,14 +93,15 @@ int main(int argc, char **argv) {
                             free(bus);
                             free(controller_1);
                             free(window);
+                            
+
+                            break;
+
+                        
                     }
                 }
             }
-
-            SDL_UpdateWindowSurface(window);
-            start = SDL_GetTicks64();
         }
-        
     }
 
     return 0;

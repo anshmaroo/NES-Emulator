@@ -1,4 +1,5 @@
 #include "mappers.h"
+#include "2C02.h"
 
 /**
  * @brief load an NROM game's program rom and CHR-ROM
@@ -38,5 +39,16 @@ void nrom(Bus *bus, char filename[]) {
         uint16_t address = i + 0x4000 * buffer[4] + 0x10;
         // printf("writing from rom address $%04x to ppu address $%04x\n", address, i);
         ppu_write_to_bus(bus, i, buffer[address]);
+    }
+
+    // set mirroring
+    if(buffer[6] == 0) {
+        // vertical arrangement, "horizontal mirroring"
+        set_mirror_mode(bus->ppu, 2);
+    }
+
+    else if (buffer[6] == 1) {
+        // horizontal arrangement, "vertical mirroring"
+        set_mirror_mode(bus->ppu, 1);
     }
 }

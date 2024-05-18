@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../include/SDL2/SDL.h"
+#include "../include/SDL2/SDL_ttf.h"
 
 /**
  * @brief initializes video
@@ -19,7 +20,7 @@ bool init_SDL(void);
  * @param scale 
  * @return SDL_Window* 
  */
-SDL_Window *create_window(char *title, int width, int height);
+SDL_Window *create_window(char *title, int x, int width, int height);
 
 /**
  * @brief Set the pixel object

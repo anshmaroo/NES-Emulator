@@ -1,7 +1,8 @@
+#include "bus.h"
 #include "6502.h"
 #include "2C02.h"
 #include "Disassemble6502.h"
-#include "bus.h"
+
 
 /************************ CREATE OBJECT ************************/
 
@@ -780,10 +781,11 @@ static inline void isc(State6502 *cpu, uint16_t address) {
 /************************ EMULATION ************************/
 
 int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
-
     
-    if (DEBUG)
-        Disassemble6502Op(opcode, cpu->pc);
+    
+    if (DEBUG) {
+        printf("%s\n", Disassemble6502Op(opcode, cpu->pc));
+    }
 
     switch (*opcode) {
         case 0x00:  // BRK imp
@@ -1551,6 +1553,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         {
             uint16_t index = (opcode[2] << 8) | opcode[1];
             uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
+            // printf("address = %04x\n", address);
             jump(cpu, address);
             break;
         }
@@ -2636,8 +2639,9 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 void clock_cpu(State6502 *cpu) {
     if (cpu->cycles == 0) {
         uint8_t opcode[3] = {cpu_read_from_bus(cpu->bus, cpu->pc), cpu_read_from_bus(cpu->bus, cpu->pc + 1), cpu_read_from_bus(cpu->bus, cpu->pc + 2)};
-        // printf("OPBYTES: %02x %02x %02x\n", opcode[0], opcode[1], opcode[2]);
+
         emulate6502Op(cpu, opcode);
+
         cpu->cycles = OPCODES_CYCLES[opcode[0]];
         cpu->pc += OPCODES_BYTES[opcode[0]];
     }

@@ -4,9 +4,11 @@
 #include <stdlib.h>
 
 
-#define DEBUG false
+#define DEBUG true
 
 
+#ifndef __6502_H__c
+#define __6502_H__
 static const uint8_t OPCODES_CYCLES[256] = {
     // 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
     7, 6, 0, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6,  // 0
@@ -36,7 +38,7 @@ static const uint8_t OPCODES_BYTES[256] = {
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,  // 3
     0, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 0, 3, 3, 3,  // 4
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,  // 5
-    1, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 6
+    1, 2, 1, 2, 2, 2, 2, 2, 1, 2, 1, 2, 0, 3, 3, 3,  // 6
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,  // 7
     2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3,  // 8
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,  // 9
@@ -48,6 +50,7 @@ static const uint8_t OPCODES_BYTES[256] = {
     2, 2, 1, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3   // F
 
 };
+
 
 typedef struct StatusRegister {
     bool n;  // bit 7, 1 = negative
@@ -79,6 +82,8 @@ typedef struct State6502 {
     // uint8_t *memory;
 
 } State6502;
+#endif
+
 
 /**
  * @brief initializes a State6502 object
