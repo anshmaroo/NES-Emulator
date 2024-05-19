@@ -87,7 +87,7 @@ typedef struct State2C02 {
     OAMdma oamdma;
 
     // MIRRORING
-    uint8_t mirror_mode;
+    bool mirror_mode;
 
     // INTERNAL REGISTERS
     loopy_register vram_address;
@@ -175,7 +175,7 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address);
  * @param ppu 
  * @param mirror_mode 
  */
-void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode);
+void set_mirror_mode(State2C02 *ppu, bool mirror_mode);
 
 
 /**

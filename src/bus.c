@@ -67,6 +67,22 @@ uint8_t cpu_read_from_bus(Bus *bus, uint16_t address) {
             value = read_from_ppu_register(bus->ppu, address);
         }
 
+        // else if (address == 0x4017) {
+        //     bool bit = 0;
+        //     if (bus->poll_input2 >= 0) {
+        //         bit = read_from_controller(bus->controller_2, bus->poll_input2++);
+        //         if (bus->poll_input2 > 7)
+        //             bus->poll_input2 = -1;
+        //         value = 0x40 | bit;
+        //         // printf("INPUT VALUE = %02x\n", value);
+        //     }
+
+        //     else if (bus->poll_input1 == -1) {
+        //         value = 0x40 | read_from_controller(bus->controller_2, 0);
+        //         // printf("STROBE READ = %02x\n", value);
+        //     }
+        // }
+
         else if (address == 0x4016) {
             bool bit = 0;
             if (bus->poll_input1 >= 0) {
@@ -118,14 +134,31 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
         bus->name_table_1[address] = value;
     }
 
-    else if (address <= 0x2bff) {
-        address &= 0x03ff;
-        bus->name_table_2[address] = value;
+   else if (address <= 0x2bff) {
+        if(bus->ppu->mirror_mode == 0) {
+            address &= 0x03ff;
+            bus->name_table_0[address] = value;
+        }
+
+        else {
+            
+            address &= 0x03ff;
+            bus->name_table_1[address] = value;
+        }
+       
     }
 
     else if (address <= 0x2fff) {
-        address &= 0x03ff;
-        bus->name_table_3[address] = value;
+        if(bus->ppu->mirror_mode == 0) {
+            address &= 0x03ff;
+            bus->name_table_1[address] = value;
+        }
+
+        else {
+            
+            address &= 0x03ff;
+            bus->name_table_0[address] = value;
+        }
     }
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
@@ -157,13 +190,30 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
     }
 
     else if (address <= 0x2bff) {
-        address &= 0x03ff;
-        value = bus->name_table_2[address];
+        if(bus->ppu->mirror_mode == 0) {
+            address &= 0x03ff;
+            value = bus->name_table_0[address];
+        }
+
+        else {
+            
+            address &= 0x03ff;
+            value = bus->name_table_1[address];
+        }
+       
     }
 
     else if (address <= 0x2fff) {
-        address &= 0x03ff;
-        value = bus->name_table_3[address];
+        if(bus->ppu->mirror_mode == 0) {
+            address &= 0x03ff;
+            value = bus->name_table_1[address];
+        }
+
+        else {
+            
+            address &= 0x03ff;
+            value = bus->name_table_0[address];
+        }
     }
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
@@ -187,7 +237,7 @@ void clock_bus(Bus *bus, SDL_Window *window) {
     if (bus->ppu->nmi && !bus->ppu->oamdma_write) {
         bus->ppu->nmi = false;
         nmi(bus->cpu);
-        // print_nametables(bus->ppu);
+        
 
     }
 

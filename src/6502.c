@@ -259,8 +259,8 @@ static inline void cmp(State6502 *cpu, uint8_t register_value,
  * @param value the value to be pushed to the stack
  */
 static inline void push(State6502 *cpu, uint8_t value) {
+    cpu_write_to_bus(cpu->bus, (0x0100) | (cpu->sp), value);
     cpu->sp--;
-    cpu_write_to_bus(cpu->bus, (0x0100) | (cpu->sp + 1), value);
     stack_val = value;
 }
 
@@ -271,8 +271,8 @@ static inline void push(State6502 *cpu, uint8_t value) {
  * @param cpu
  */
 static uint8_t pop(State6502 *cpu) {
-    uint8_t value = cpu_read_from_bus(cpu->bus, (0x0100 | cpu->sp + 1));
     cpu->sp++;
+    uint8_t value = cpu_read_from_bus(cpu->bus, (0x0100 | cpu->sp));
     return value;
     
 }
@@ -285,9 +285,9 @@ static uint8_t pop(State6502 *cpu) {
  * @param value the value to be pushed to the stack
  */
 static inline void push_16(State6502 *cpu, uint16_t value) {
-    push(cpu, value & 0xff);
-    // printf("PUSHED %02x TO %04X\n", value & 0xff, (0x100 | cpu->sp + 1));
     push(cpu, (value >> 8) & 0xff);
+    // printf("PUSHED %02x TO %04X\n", value & 0xff, (0x100 | cpu->sp + 1));
+    push(cpu, (value & 0xff));
     // printf("PUSHED %02x TO %04X\n", (value >> 8) & 0xff, (0x100 | cpu->sp + 1));
     stack_val = value;
 }
@@ -299,9 +299,9 @@ static inline void push_16(State6502 *cpu, uint16_t value) {
  * @param cpu the State6502 object
  */
 static uint16_t pop_16(State6502 *cpu) {
-    uint8_t high = pop(cpu);
-    // printf("POPPED %02x FROM %04X\n", high, (0x100 | cpu->sp));
     uint8_t low = pop(cpu);
+    // printf("POPPED %02x FROM %04X\n", high, (0x100 | cpu->sp));
+    uint8_t high = pop(cpu);
     // printf("POPPED %02x FROM %04X\n", low, (0x100 | cpu->sp));
     uint16_t value = (high << 8) | low;
     return value;
@@ -446,7 +446,7 @@ void reset(State6502 *cpu) {
  *
  * @param cpu
  */
-static inline void irq(State6502 *cpu) {
+void irq(State6502 *cpu) {
     push_16(cpu, cpu->pc);
     push(cpu, get_status_register(cpu));
     cpu->sr.i = 1;
@@ -463,7 +463,6 @@ void nmi(State6502 *cpu) {
     push_16(cpu, cpu->pc);
     push(cpu, get_status_register(cpu));
     cpu->pc = (cpu_read_from_bus(cpu->bus, 0xfffb) << 8) | cpu_read_from_bus(cpu->bus, 0xfffa);
-    // printf("NMI OCCURRED, PC = %04x\n", cpu->pc);
     cpu->cycles += 7;
 }
 
@@ -503,27 +502,14 @@ static inline void jump(State6502 *cpu, uint16_t address) {
  * @param value value to add to the accumulator
  */
 static inline void adc(State6502 *cpu, uint8_t value) {
-    uint16_t result = cpu->a + value + cpu->sr.c;
-    // update carry flags
-    if (cpu->sr.d) {
-        if (result > 0x63) {
-            cpu->sr.c = 1;
-        } else {
-            cpu->sr.c = 0;
-        }
-    } else {
-        if (result > 255) {
-            cpu->sr.c = 1;
-        } else {
-            cpu->sr.c = 0;
-        }
-    }
-
-    update_zn(cpu, result);  // update zero and negative flags
-    cpu->sr.v =
-        ~(cpu->a ^ value) & (cpu->a ^ result) & 0x80;  // update overflow flag
-
-    cpu->a = result & 0xff;
+    uint16_t sum = cpu->a + value + cpu->sr.c;
+    cpu->sr.c = sum > 0xFF;
+    // The overflow flag is set when the sign of the addends is the same and
+    // differs from the sign of the sum
+    cpu->sr.v = ~(cpu->a ^ value) & (cpu->a ^ sum) & 0x80;
+    
+    update_zn(cpu, sum);
+    cpu->a = sum;
 }
 
 /**
@@ -775,7 +761,6 @@ static inline void isc(State6502 *cpu, uint16_t address) {
     inc(cpu, address);
     sbc(cpu, cpu_read_from_bus(cpu->bus, address));
 }
-
 
 
 /************************ EMULATION ************************/
@@ -1276,15 +1261,15 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        case 0x44:  // EOR $oper (zero-page)
+        case 0x44:  // NOP
         {
-            uint8_t address = opcode[1];
-            xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
-        case 0x45:  // NOP
+        case 0x45:  // EOR $oper (zero-page)
         {
+            uint8_t address = opcode[1];
+            xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
@@ -1552,7 +1537,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         case 0x6c:  // JMP ($oper $oper) (indirect)
         {
             uint16_t index = (opcode[2] << 8) | opcode[1];
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = (cpu_read_from_bus(cpu->bus, (uint16_t) (index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
             // printf("address = %04x\n", address);
             jump(cpu, address);
             break;
@@ -2144,6 +2129,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         case 0xbd:  // LDA X, $oper $oper (absolute, x-indexed)
         {
             uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            // printf("ADDRESS = $%04x\n", address);
             lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }

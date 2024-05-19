@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 
-#define DEBUG true
+#define DEBUG false
 
 
 #ifndef __6502_H__c

@@ -42,13 +42,6 @@ void nrom(Bus *bus, char filename[]) {
     }
 
     // set mirroring
-    if(buffer[6] == 0) {
-        // vertical arrangement, "horizontal mirroring"
-        set_mirror_mode(bus->ppu, 2);
-    }
-
-    else if (buffer[6] == 1) {
-        // horizontal arrangement, "vertical mirroring"
-        set_mirror_mode(bus->ppu, 1);
-    }
+    set_mirror_mode(bus->ppu, buffer[6]);
+    printf("MIRROR MODE = %s\n", (buffer[6] ? "VERTICAL MIRRORING (HORIZONTAL ARRANGEMENT)" : "HORIZONTAL MIRRORING (VERTICAL ARRANGEMENT)"));
 }

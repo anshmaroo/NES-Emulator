@@ -31,6 +31,9 @@ State2C02 *Init2C02() {
         }
     }
 
+
+    state->vram_address.reg = 0;
+    state->tram_address.reg = 0;
     state->sprite_shifter_pattern_lo = malloc(0x8);
     state->sprite_shifter_pattern_hi = malloc(0x8);
 
@@ -39,6 +42,7 @@ State2C02 *Init2C02() {
     state->scanline = 0;
 
     state->oamdma_clock = 0;
+
 
     return state;
 }
@@ -74,10 +78,10 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
             ppu->control.background_tile_select = ((value) >> 4) & 0x1;
             ppu->control.sprite_tile_select = ((value) >> 3) & 0x1;
             ppu->control.vram_increment_mode = ((value) >> 2) & 0x1;
-            ppu->control.nametable_select = (((value) >> 1) & 0x1) | (value & 0x1);
+            ppu->control.nametable_select = (value & 0x3);
 
+            ppu->tram_address.nametable_y = (ppu->control.nametable_select & 0x2) >> 1;
             ppu->tram_address.nametable_x = ppu->control.nametable_select & 0x1;
-            ppu->tram_address.nametable_y = ppu->control.nametable_select & 0x2;
 
             break;
 
@@ -117,6 +121,8 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
                 case 3:
                     ppu->primary_oam[ppu->oamaddr.address / 4].x = value;
                     break;
+
+                    // printf("WRITING SPRITE!\n");
             }
 
             ppu->oamdata.data = value;
@@ -128,18 +134,19 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
             if (ppu->w == 0) {
                 ppu->fine_x = value & 0x7;                // up to 8 pixel scroll
                 ppu->tram_address.coarse_x = value >> 3;  // tile scroll
+
                 ppu->w = 1;
             }
 
             else if (ppu->w == 1) {
                 ppu->tram_address.fine_y = value & 0x7;
                 ppu->tram_address.coarse_y = value >> 3;
+
                 ppu->w = 0;
             }
             break;
 
         case 0x06:  // PPUADDR
-            // getchar();
 
             if (ppu->w == 0) {
                 ppu->tram_address.reg = (uint16_t)((value & 0x3F) << 8) | (ppu->tram_address.reg & 0x00FF);
@@ -156,10 +163,12 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
 
         case 0x07:  // PPUDATA
             ppu->ppudata.data = value;
-            ppu_write_to_bus(ppu->bus, ppu->vram_address.reg, value);
 
+            ppu_write_to_bus(ppu->bus, ppu->vram_address.reg, value);
+            
             ppu->vram_address.reg += ppu->control.vram_increment_mode ? 32 : 1;
             ppu->vram_address.reg &= 0x3fff;
+
             break;
 
         case 0x4014:  // OAMDMA
@@ -180,27 +189,23 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
     uint8_t value = 0;
     switch (address) {
         case 0x00:  // control
-            value = ppu->io_db;
             break;
 
         case 0x01:  // MASK
-            value = ppu->io_db;
             break;
 
         case 0x02:  // STATUS
             value |= ppu->status.vblank << 7;
             value |= ppu->status.sprite_0_hit << 6;
             value |= ppu->status.sprite_overflow << 5;
-            value |= ppu->io_db & 0x1f;
+            value |= ppu->data_buffer & 0x1f;
 
             ppu->status.vblank = 0;
             ppu->w = 0;
 
-
             break;
 
         case 0x03:  // OAMADDR
-            value = ppu->io_db;
             break;
 
         case 0x04:  // OAMDATA
@@ -208,22 +213,19 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
             break;
 
         case 0x05:  // PPUSCROLL
-            value = ppu->io_db;
             break;
 
         case 0x06:  // PPUADDR
-            value = ppu->io_db;
             break;
 
         case 0x07:  // PPUDATA
             value = ppu->data_buffer;
-            ppu->data_buffer = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);  
-            if (ppu->vram_address.reg >= 0x3f00) value = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
+            ppu->data_buffer = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
+            if (ppu->vram_address.reg >= 0x3f00)
+                value = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
             ppu->vram_address.reg += (ppu->control.vram_increment_mode == 1) ? 32 : 1;
-
+            ppu->vram_address.reg &= 0x3fff;
             break;
-
-        
     }
 
     ppu->io_db = value;
@@ -232,11 +234,11 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
 
 /**
  * @brief set the mirror mode
- * 
- * @param ppu 
- * @param mirror_mode 
+ *
+ * @param ppu
+ * @param mirror_mode
  */
-void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode) {
+void set_mirror_mode(State2C02 *ppu, bool mirror_mode) {
     ppu->mirror_mode = mirror_mode;
 }
 
@@ -280,7 +282,7 @@ void render_nametables(State2C02 *ppu, SDL_Window *window) {
     uint8_t scale = SDL_GetWindowSurface(window)->w / 256;
     // uint32_t colors[4] = {0x000000, 0x444444, 0x999999, 0xffffff};
 
-    uint16_t nametable_start = 0x2000 + ppu->control.nametable_select * 0x400;
+    uint16_t nametable_start = 0x2400;
     uint16_t attribute_table_start = nametable_start + 0x400 - 0x40;
     uint16_t pattern_table_start = ppu->control.background_tile_select * 0x1000;
 
@@ -328,7 +330,7 @@ void render_nametables(State2C02 *ppu, SDL_Window *window) {
 void print_nametables(State2C02 *ppu) {
     FILE *d = fopen("nametable.txt", "w+");
 
-    int nametable_start = 0x2000 + 0x400;
+    int nametable_start = ppu->vram_address.nametable_y * 0x800 + ppu->vram_address.nametable_x * 0x400 + 0x2000;
     for (int i = nametable_start; i < nametable_start + 0x400; i++) {
         if (i % 32 == 0 && i > 0)
             fprintf(d, "\n");
@@ -348,8 +350,8 @@ void increment_scroll_x(State2C02 *ppu) {
         if (ppu->vram_address.coarse_x == 31) {
             ppu->vram_address.coarse_x = 0;
             ppu->vram_address.nametable_x = ~ppu->vram_address.nametable_x;
-        } 
-        
+        }
+
         else {
             ppu->vram_address.coarse_x++;
         }
@@ -370,14 +372,13 @@ void increment_scroll_y(State2C02 *ppu) {
 
             if (ppu->vram_address.coarse_y == 29) {
                 ppu->vram_address.coarse_y = 0;
-
                 ppu->vram_address.nametable_y = ~ppu->vram_address.nametable_y;
             }
-            
+
             else if (ppu->vram_address.coarse_y == 31) {
                 ppu->vram_address.coarse_y = 0;
-            } 
-            
+            }
+
             else {
                 ppu->vram_address.coarse_y++;
             }
@@ -473,6 +474,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
 
         // write
         else {
+            // printf("WRITING SPRITE!\n");
             uint16_t address = (ppu->oamdma.address_high_byte << 8) | (ppu->oamdma_clock / 2);
             uint8_t value = cpu_read_from_bus(ppu->bus, address);
             switch (ppu->oamdma_clock % 8) {
@@ -516,6 +518,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         if (ppu->scanline == -1 && ppu->cycles == 1) {
             ppu->status.vblank = 0;
             ppu->status.sprite_overflow = 0;
+            ppu->status.sprite_0_hit = 0;
         }
 
         // background graphics
@@ -568,6 +571,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             // increment y scroll @ end of scanline. this should also increase vram address
             increment_scroll_y(ppu);
         }
+
         if (ppu->cycles == 257) {
             // reset x position
             load_background_shifters(ppu);
@@ -708,6 +712,26 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                                 set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, palette_address)]);
                             }
                         }
+
+                        // SPRITE ZERO HIT
+                        if (i == 0) {
+                            // rendering enabled
+                            if (ppu->mask.background_enable && ppu->mask.sprite_enable) {
+                                if (!(ppu->mask.background_left_column_enable | ppu->mask.sprite_left_column_enable)) {
+                                    if (x_start >= 8 && x_start < 256) {
+                                        ppu->status.sprite_0_hit = 1;
+                                    }
+                                }
+
+                                else {
+                                    if (x_start >= 0 && x_start < 256) {
+                                        ppu->status.sprite_0_hit = 1;
+                                    }
+                                }
+                            }
+                        }
+
+                        
                     }
                 }
             }
