@@ -20,14 +20,17 @@ int main(int argc, char **argv) {
     State2C02 *ppu = Init2C02();
     Bus *bus = InitBus();
     Controller *controller_1 = InitController();
+    Controller *controller_2 = InitController();
 
     cpu->bus = bus;
     ppu->bus = bus;
     controller_1->bus = bus;
+    controller_2->bus = bus;
 
     bus->cpu = cpu;
     bus->ppu = ppu;
     bus->controller_1 = controller_1;
+    bus->controller_2 = controller_2;
 
     // load game's program rom and chr rom
     nrom(bus, argv[1]);
@@ -62,25 +65,29 @@ int main(int argc, char **argv) {
     double start = SDL_GetTicks64();
     double end = SDL_GetTicks64();
     double delta = 0;
-    
 
     while (!quit) {
         end = SDL_GetTicks64();
         delta = end - start;
 
         while (delta < ((1000.0 / FPS) / 89342)) {
+
+            printf("FPS: %f\n", (1000.0 / delta));
             end = SDL_GetTicks64();
             delta = end - start;
+
+            
         }
 
-            clock_bus(bus, window);
-        
+        clock_bus(bus, window);
 
         // read input and redner
         pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
         set_controller(controller_1, pressed_keys);
+        // set_controller(controller_2, pressed_keys);
         if (ppu->scanline == 241 && ppu->cycles == 1) {
             SDL_UpdateWindowSurface(window);
+
             start = SDL_GetTicks64();
 
             while (SDL_PollEvent(&event)) {
@@ -93,11 +100,8 @@ int main(int argc, char **argv) {
                             free(bus);
                             free(controller_1);
                             free(window);
-                            
 
                             break;
-
-                        
                     }
                 }
             }

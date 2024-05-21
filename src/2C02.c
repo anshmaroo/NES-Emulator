@@ -31,7 +31,6 @@ State2C02 *Init2C02() {
         }
     }
 
-
     state->vram_address.reg = 0;
     state->tram_address.reg = 0;
     state->sprite_shifter_pattern_lo = malloc(0x8);
@@ -42,7 +41,6 @@ State2C02 *Init2C02() {
     state->scanline = 0;
 
     state->oamdma_clock = 0;
-
 
     return state;
 }
@@ -99,7 +97,7 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
 
         case 0x02:  // STATUS
             ppu->status.vblank = ((value) >> 7) & 0x1;
-            ppu->status.sprite_0_hit = ((value) >> 6) & 0x1;
+            ppu->status.sprite_zero_hit = ((value) >> 6) & 0x1;
             ppu->status.sprite_overflow = ((value) >> 5) & 0x1;
             break;
 
@@ -165,7 +163,7 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
             ppu->ppudata.data = value;
 
             ppu_write_to_bus(ppu->bus, ppu->vram_address.reg, value);
-            
+
             ppu->vram_address.reg += ppu->control.vram_increment_mode ? 32 : 1;
             ppu->vram_address.reg &= 0x3fff;
 
@@ -196,7 +194,7 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
 
         case 0x02:  // STATUS
             value |= ppu->status.vblank << 7;
-            value |= ppu->status.sprite_0_hit << 6;
+            value |= ppu->status.sprite_zero_hit << 6;
             value |= ppu->status.sprite_overflow << 5;
             value |= ppu->data_buffer & 0x1f;
 
@@ -349,7 +347,7 @@ void increment_scroll_x(State2C02 *ppu) {
     if (ppu->mask.background_enable || ppu->mask.sprite_enable) {
         if (ppu->vram_address.coarse_x == 31) {
             ppu->vram_address.coarse_x = 0;
-            ppu->vram_address.nametable_x = ~ppu->vram_address.nametable_x;
+            ppu->vram_address.nametable_x = !ppu->vram_address.nametable_x;
         }
 
         else {
@@ -372,7 +370,7 @@ void increment_scroll_y(State2C02 *ppu) {
 
             if (ppu->vram_address.coarse_y == 29) {
                 ppu->vram_address.coarse_y = 0;
-                ppu->vram_address.nametable_y = ~ppu->vram_address.nametable_y;
+                ppu->vram_address.nametable_y = !ppu->vram_address.nametable_y;
             }
 
             else if (ppu->vram_address.coarse_y == 31) {
@@ -518,7 +516,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         if (ppu->scanline == -1 && ppu->cycles == 1) {
             ppu->status.vblank = 0;
             ppu->status.sprite_overflow = 0;
-            ppu->status.sprite_0_hit = 0;
+            ppu->status.sprite_zero_hit = 0;
         }
 
         // background graphics
@@ -581,6 +579,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         // load secondary OAM
         if (ppu->cycles == 257 && ppu->scanline >= 0) {
             uint8_t n = 0;
+            ppu->sprite_zero_on_scanline = false;
             ppu->sprite_count = 0;
 
             for (int i = 0; i < 8; i++) {
@@ -589,8 +588,8 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             }
 
             while (n < 64 && ppu->sprite_count < 9) {
-                int16_t difference = ppu->scanline - ppu->primary_oam[n].y;
-
+                // check if sprite is in a valid y range
+                int difference = ppu->scanline - ppu->primary_oam[n].y;
                 if (difference >= 0 && difference < (ppu->control.sprite_height ? 16 : 8)) {
                     if (ppu->sprite_count < 8) {
                         ppu->secondary_oam[ppu->sprite_count].y = ppu->primary_oam[n].y;
@@ -598,9 +597,15 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                         ppu->secondary_oam[ppu->sprite_count].attributes = ppu->primary_oam[n].attributes;
                         ppu->secondary_oam[ppu->sprite_count].x = ppu->primary_oam[n].x;
 
+                        // increment sprite count
                         ppu->sprite_count++;
+
+                        if (n == 0) {
+                            ppu->sprite_zero_on_scanline = true;
+                        }
                     }
                 }
+                // increment primary oam pointer
                 n++;
             }
 
@@ -610,36 +615,33 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         // load sprite shifters
         if (ppu->cycles == 340) {
             for (int i = 0; i < ppu->sprite_count; i++) {
-                bool priority = ~(ppu->secondary_oam[i].attributes >> 5) & 0x1;
+                bool flip_vertical = (ppu->secondary_oam[i].attributes >> 7) & 0x1;
+                bool flip_horizontal = (ppu->secondary_oam[i].attributes >> 6) & 0x1;
 
-                if (priority) {
-                    bool flip_vertical = (ppu->secondary_oam[i].attributes >> 7) & 0x1;
-                    bool flip_horizontal = (ppu->secondary_oam[i].attributes >> 6) & 0x1;
-                    if (ppu->control.sprite_height == 0) {
-                        uint8_t y_offset = flip_vertical ? (7 - (ppu->scanline - ppu->secondary_oam[i].y)) : (ppu->scanline - ppu->secondary_oam[i].y);
-                        uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
+                if (ppu->control.sprite_height == 0) {
+                    uint8_t y_offset = flip_vertical ? (7 - (ppu->scanline - ppu->secondary_oam[i].y)) : (ppu->scanline - ppu->secondary_oam[i].y);
+                    uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
 
-                        ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset);
-                        ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset + 8);
+                    ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset);
+                    ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset + 8);
 
-                        if (flip_horizontal) {
-                            ppu->sprite_shifter_pattern_lo[i] = flip_byte(ppu->sprite_shifter_pattern_lo[i]);
-                            ppu->sprite_shifter_pattern_hi[i] = flip_byte(ppu->sprite_shifter_pattern_hi[i]);
-                        }
+                    if (flip_horizontal) {
+                        ppu->sprite_shifter_pattern_lo[i] = flip_byte(ppu->sprite_shifter_pattern_lo[i]);
+                        ppu->sprite_shifter_pattern_hi[i] = flip_byte(ppu->sprite_shifter_pattern_hi[i]);
                     }
+                }
 
-                    else {
-                        uint8_t y_offset = flip_vertical ? (15 - (ppu->scanline - ppu->secondary_oam[i].y)) : (ppu->scanline - ppu->secondary_oam[i].y);
-                        uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
-                        uint16_t pattern_table_start = (pattern_index & 0x1) * 0x1000;
+                else {
+                    uint8_t y_offset = flip_vertical ? (15 - (ppu->scanline - ppu->secondary_oam[i].y)) : (ppu->scanline - ppu->secondary_oam[i].y);
+                    uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
+                    uint16_t pattern_table_start = (pattern_index & 0x1) * 0x1000;
 
-                        ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, pattern_table_start + (pattern_index * 0x10) + y_offset);
-                        ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, pattern_table_start + (pattern_index * 0x10) + y_offset + 8);
+                    ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, pattern_table_start + (pattern_index * 0x10) + y_offset);
+                    ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, pattern_table_start + (pattern_index * 0x10) + y_offset + 8);
 
-                        if (flip_horizontal) {
-                            ppu->sprite_shifter_pattern_lo[i] = flip_byte(ppu->sprite_shifter_pattern_lo[i]);
-                            ppu->sprite_shifter_pattern_hi[i] = flip_byte(ppu->sprite_shifter_pattern_hi[i]);
-                        }
+                    if (flip_horizontal) {
+                        ppu->sprite_shifter_pattern_lo[i] = flip_byte(ppu->sprite_shifter_pattern_lo[i]);
+                        ppu->sprite_shifter_pattern_hi[i] = flip_byte(ppu->sprite_shifter_pattern_hi[i]);
                     }
                 }
             }
@@ -658,6 +660,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         int x_start = (ppu->cycles - 1) * scale;
         int y_start = ppu->scanline * scale;
 
+        // background rendering
         uint8_t bg_pixel = 0x00;
         uint8_t bg_palette = 0x00;
         uint16_t palette_address = 0x3f00;
@@ -675,7 +678,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
 
             bg_palette = (bg_pal1 << 1) | bg_pal0;
 
-            palette_address += (bg_palette << 2) + bg_pixel;
+            palette_address += (bg_pixel == 0) ? 0x00 : (bg_palette << 2) + bg_pixel;
 
             int x = x_start;
             int y = y_start;
@@ -688,50 +691,70 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             // printf("rendering bg\n");
         }
 
+        // sprite rendering
         uint8_t sprite_pixel = 0x00;
         uint8_t sprite_palette = 0x00;
+        uint8_t p0_pixel = 0x00;
+        uint8_t p1_pixel = 0x00;
         palette_address = 0x3f10;
 
         if (ppu->mask.sprite_enable) {
-            if (ppu->sprite_count != 0) {
-                for (int i = 0; i < ppu->sprite_count; i++) {
-                    if (ppu->secondary_oam[i].x == 0) {
-                        uint8_t p0_pixel = (ppu->sprite_shifter_pattern_lo[i] & 0x80) > 0;
-                        uint8_t p1_pixel = (ppu->sprite_shifter_pattern_hi[i] & 0x80) > 0;
-                        sprite_pixel = (p1_pixel << 1) | p0_pixel;
-                        if (sprite_pixel != 0) {
-                            sprite_palette = ppu->secondary_oam[i].attributes & 0x3;
-                            palette_address += (sprite_palette << 2) + sprite_pixel;
+            // reset sprite zero hit flag
+            ppu->sprite_zero_rendered = false;
+            // render each sprite
+            for (int i = 0; i < ppu->sprite_count; i++) {
+                // check if the correct x location has been reached
+                if (ppu->secondary_oam[i].x == 0) {
+                    // get pixel value
+                    p0_pixel = (ppu->sprite_shifter_pattern_lo[i] & 0x80) > 0;
+                    p1_pixel = (ppu->sprite_shifter_pattern_hi[i] & 0x80) > 0;
+                    sprite_pixel = (p1_pixel << 1) | p0_pixel;
 
-                            int x = x_start;
-                            int y = y_start;
-
-                            for (int i = 0; i < scale * scale; i++) {
-                                x = x_start + (i % scale);
-                                y = y_start + (i / scale);
-                                set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, palette_address)]);
-                            }
-                        }
-
-                        // SPRITE ZERO HIT
+                    // render only if pixel is opaque
+                    if (sprite_pixel != 0) {
+                        // check for sprite zero hit
                         if (i == 0) {
-                            // rendering enabled
-                            if (ppu->mask.background_enable && ppu->mask.sprite_enable) {
-                                if (!(ppu->mask.background_left_column_enable | ppu->mask.sprite_left_column_enable)) {
-                                    if (x_start >= 8 && x_start < 256) {
-                                        ppu->status.sprite_0_hit = 1;
-                                    }
-                                }
-
-                                else {
-                                    if (x_start >= 0 && x_start < 256) {
-                                        ppu->status.sprite_0_hit = 1;
-                                    }
-                                }
-                            }
+                            ppu->sprite_zero_rendered = true;
                         }
 
-                        
+                        // check for sprite priority
+                        if ((ppu->secondary_oam[i].attributes >> 5) & 0x1) {
+                            continue;
+                        }
+
+                        // render only if sprite has priority
+                        sprite_palette = ppu->secondary_oam[i].attributes & 0x3;
+                        palette_address += (sprite_palette << 2) + sprite_pixel;
+
+                        int x = x_start;
+                        int y = y_start;
+
+                        for (int i = 0; i < scale * scale; i++) {
+                            x = x_start + (i % scale);
+                            y = y_start + (i / scale);
+                            set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, palette_address)]);
+                        }
+                    }
+                }
+            }
+        }
+
+        // sprite 0 hit detection
+        if (!ppu->status.sprite_zero_hit && ppu->sprite_zero_on_scanline && ppu->sprite_zero_rendered) {
+            // only if sprite and background rendering are enabled
+            if (ppu->mask.background_enable && ppu->mask.sprite_enable) {
+                // left column mode
+                if (!(ppu->mask.background_left_column_enable | ppu->mask.sprite_left_column_enable)) {
+                    // correct x location
+                    if (ppu->cycles > 8 && ppu->cycles + 7 < 256) {
+                        ppu->status.sprite_zero_hit = 1;
+                    }
+                }
+
+                else {
+                    // correct x location
+                    if (ppu->cycles + 7 < 256) {
+                        ppu->status.sprite_zero_hit = 1;
                     }
                 }
             }
@@ -747,6 +770,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         }
     }
 
+    // reset cycles/scanline
     ppu->cycles++;
     if (ppu->cycles >= 341) {
         ppu->cycles = 0;

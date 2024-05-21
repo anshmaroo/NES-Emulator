@@ -26,7 +26,7 @@ typedef struct Mask {
 
 typedef struct Status {
     bool vblank;
-    bool sprite_0_hit;
+    bool sprite_zero_hit;
     bool sprite_overflow;
 } Status;
 
@@ -105,6 +105,8 @@ typedef struct State2C02 {
     uint8_t sprite_count;
     uint8_t *sprite_shifter_pattern_lo;
     uint8_t *sprite_shifter_pattern_hi;
+    bool sprite_zero_on_scanline;
+    bool sprite_zero_rendered;
 
     // OAMDMA
     bool oamdma_write;

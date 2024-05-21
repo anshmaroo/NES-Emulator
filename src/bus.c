@@ -162,7 +162,11 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     }
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
-        address &= 0x001f;
+        address &= 0x1f;
+        
+        if(address >= 0x10 && (address % 4) == 0)
+            address = 0x00;
+        
         bus->palette[address] = value;
         // GLOBAL_PALETTE[address] = value;
     }
@@ -218,6 +222,10 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
         address &= 0x001f;
+
+        if(address >= 0x10 && (address % 4) == 0)
+            address = 0x00;
+
         value = bus->palette[address];
         // printf("PALETTE VALUE = %04x\n", address);
     }
