@@ -135,7 +135,7 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     }
 
    else if (address <= 0x2bff) {
-        if(bus->ppu->mirror_mode == 0) {
+        if(bus->ppu->mirror_mode == 1) {
             address &= 0x03ff;
             bus->name_table_0[address] = value;
         }
@@ -149,7 +149,7 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     }
 
     else if (address <= 0x2fff) {
-        if(bus->ppu->mirror_mode == 0) {
+        if(bus->ppu->mirror_mode == 1) {
             address &= 0x03ff;
             bus->name_table_1[address] = value;
         }

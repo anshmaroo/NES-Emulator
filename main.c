@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "src/2C02.h"
 #include "src/6502.h"
@@ -62,33 +63,26 @@ int main(int argc, char **argv) {
     reset(cpu);
 
     // initialize timers
-    double start = SDL_GetTicks64();
-    double end = SDL_GetTicks64();
-    double delta = 0;
-
+    clock_t start = clock();
+    clock_t diff = clock() - start;
     while (!quit) {
-        end = SDL_GetTicks64();
-        delta = end - start;
 
-        while (delta < ((1000.0 / FPS) / 89342)) {
-
-            printf("FPS: %f\n", (1000.0 / delta));
-            end = SDL_GetTicks64();
-            delta = end - start;
-
-            
-        }
-
+        // progress logic
         clock_bus(bus, window);
 
         // read input and redner
         pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
         set_controller(controller_1, pressed_keys);
-        // set_controller(controller_2, pressed_keys);
-        if (ppu->scanline == 241 && ppu->cycles == 1) {
-            SDL_UpdateWindowSurface(window);
 
-            start = SDL_GetTicks64();
+        if (ppu->scanline == 241 && ppu->cycles == 1) {
+            while (((diff * 1000) / CLOCKS_PER_SEC) < (1000.0 / FPS)) {
+                diff = clock() - start;
+            }
+            
+            start = clock();
+            diff = clock() - start;
+
+            SDL_UpdateWindowSurface(window);
 
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_KEYDOWN) {
@@ -100,8 +94,8 @@ int main(int argc, char **argv) {
                             free(bus);
                             free(controller_1);
                             free(window);
-
                             break;
+
                     }
                 }
             }

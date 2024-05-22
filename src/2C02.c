@@ -702,7 +702,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             // reset sprite zero hit flag
             ppu->sprite_zero_rendered = false;
             // render each sprite
-            for (int i = 0; i < ppu->sprite_count; i++) {
+            for (int i = ppu->sprite_count - 1; i > -1; i--) {
                 // check if the correct x location has been reached
                 if (ppu->secondary_oam[i].x == 0) {
                     // get pixel value
@@ -718,7 +718,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                         }
 
                         // check for sprite priority
-                        if ((ppu->secondary_oam[i].attributes >> 5) & 0x1) {
+                        if ((ppu->secondary_oam[i].attributes >> 5) & 0x1 && bg_pixel != 0) {
                             continue;
                         }
 
