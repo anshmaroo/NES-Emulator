@@ -531,7 +531,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                     load_background_shifters(ppu);
 
                     // get index of pattern table
-                    ppu->bg_next_tile_index = ppu_read_from_bus(ppu->bus, 0x2000 | (ppu->vram_address.reg & 0x0fff));
+                    ppu->bg_next_tile_index = ppu_read_from_bus(ppu->bus, 0x2000 | ppu->vram_address.nametable_y * 0x800 | ppu->vram_address.nametable_x * 0x400 | ppu->vram_address.coarse_y * 32 | ppu->vram_address.coarse_x);
                     break;
 
                 case 2:
