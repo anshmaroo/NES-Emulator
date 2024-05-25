@@ -67,22 +67,6 @@ uint8_t cpu_read_from_bus(Bus *bus, uint16_t address) {
             value = read_from_ppu_register(bus->ppu, address);
         }
 
-        // else if (address == 0x4017) {
-        //     bool bit = 0;
-        //     if (bus->poll_input2 >= 0) {
-        //         bit = read_from_controller(bus->controller_2, bus->poll_input2++);
-        //         if (bus->poll_input2 > 7)
-        //             bus->poll_input2 = -1;
-        //         value = 0x40 | bit;
-        //         // printf("INPUT VALUE = %02x\n", value);
-        //     }
-
-        //     else if (bus->poll_input1 == -1) {
-        //         value = 0x40 | read_from_controller(bus->controller_2, 0);
-        //         // printf("STROBE READ = %02x\n", value);
-        //     }
-        // }
-
         else if (address == 0x4016) {
             bool bit = 0;
             if (bus->poll_input1 >= 0) {

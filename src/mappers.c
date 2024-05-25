@@ -1,5 +1,18 @@
 #include "mappers.h"
+#include "bus.h"
 #include "2C02.h"
+
+
+
+/**
+ * @brief select and apply mapper
+ * 
+ * @param bus 
+ * @param filename 
+ */
+void mapper(Bus *bus, char filename[]) {
+
+}
 
 /**
  * @brief load an NROM game's program rom and CHR-ROM
@@ -43,5 +56,5 @@ void nrom(Bus *bus, char filename[]) {
 
     // set mirroring
     set_mirror_mode(bus->ppu, buffer[6]);
-    printf("MIRROR MODE = %s\n", (buffer[6] ? "VERTICAL MIRRORING (HORIZONTAL ARRANGEMENT)" : "HORIZONTAL MIRRORING (VERTICAL ARRANGEMENT)"));
+    // printf("MIRROR MODE = %s\n", (buffer[6] ? "VERTICAL MIRRORING (HORIZONTAL ARRANGEMENT)" : "HORIZONTAL MIRRORING (VERTICAL ARRANGEMENT)"));
 }

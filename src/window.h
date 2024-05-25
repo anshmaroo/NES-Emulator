@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
-#include "../include/SDL2/SDL.h"
-#include "../include/SDL2/SDL_ttf.h"
+#include <SDL2/SDL.h>
+
 
 /**
  * @brief initializes video

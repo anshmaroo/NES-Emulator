@@ -17,20 +17,6 @@ bool init_SDL()
         return false;
     }
 
-    if (TTF_Init() < 0)
-    {
-        fprintf(stderr, "Could not initialize TTF: %s\n", TTF_GetError());
-        exit(0);
-        return false;
-    }
-
-    // if (SDL_Init(SDL_INIT_AUDIO) < 0)
-    // {
-    //     fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
-    //     exit(0);
-    //     return false;
-    // }
-
     return true;
 }
 
