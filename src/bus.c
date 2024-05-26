@@ -114,43 +114,34 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     }
 
     else if (address <= 0x27ff) {
-        address &= 0x03ff;
-        bus->name_table_1[address] = value;
+         address &= 0x03ff;
+        if (bus->ppu->mirror_mode == 0)
+            bus->name_table_0[address] = value;
+        else
+            bus->name_table_1[address] = value;
     }
 
-   else if (address <= 0x2bff) {
-        if(bus->ppu->mirror_mode == 1) {
-            address &= 0x03ff;
-            bus->name_table_0[address] = value;
-        }
-
-        else {
-            
-            address &= 0x03ff;
+    else if (address <= 0x2bff) {
+        address &= 0x03ff;
+        if (bus->ppu->mirror_mode == 0)
             bus->name_table_1[address] = value;
-        }
-       
+        else
+            bus->name_table_0[address] = value;
+
     }
 
     else if (address <= 0x2fff) {
-        if(bus->ppu->mirror_mode == 1) {
-            address &= 0x03ff;
-            bus->name_table_1[address] = value;
-        }
+        address &= 0x03ff;
+        bus->name_table_1[address] = value;
 
-        else {
-            
-            address &= 0x03ff;
-            bus->name_table_0[address] = value;
-        }
     }
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
         address &= 0x1f;
-        
-        if(address >= 0x10 && (address % 4) == 0)
+
+        if (address >= 0x10 && (address % 4) == 0)
             address = 0x00;
-        
+
         bus->palette[address] = value;
         // GLOBAL_PALETTE[address] = value;
     }
@@ -173,41 +164,32 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
     }
 
     else if (address <= 0x27ff) {
-        address &= 0x03ff;
-        value = bus->name_table_1[address];
+         address &= 0x03ff;
+        if (bus->ppu->mirror_mode == 0)
+            value = bus->name_table_0[address];
+        else
+            value = bus->name_table_1[address];
     }
 
     else if (address <= 0x2bff) {
-        if(bus->ppu->mirror_mode == 0) {
-            address &= 0x03ff;
-            value = bus->name_table_0[address];
-        }
-
-        else {
-            
-            address &= 0x03ff;
+        address &= 0x03ff;
+        if (bus->ppu->mirror_mode == 0)
             value = bus->name_table_1[address];
-        }
-       
+        else
+            value = bus->name_table_0[address];
+
     }
 
     else if (address <= 0x2fff) {
-        if(bus->ppu->mirror_mode == 0) {
-            address &= 0x03ff;
-            value = bus->name_table_1[address];
-        }
+        address &= 0x03ff;
+        value = bus->name_table_1[address];
 
-        else {
-            
-            address &= 0x03ff;
-            value = bus->name_table_0[address];
-        }
     }
 
     else if (address >= 0x3f00 && address <= 0x3fff) {
         address &= 0x001f;
 
-        if(address >= 0x10 && (address % 4) == 0)
+        if (address >= 0x10 && (address % 4) == 0)
             address = 0x00;
 
         value = bus->palette[address];
@@ -216,6 +198,7 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
 
     return value;
 }
+
 
 void clock_bus(Bus *bus, SDL_Window *window) {
     
