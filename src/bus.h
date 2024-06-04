@@ -23,6 +23,7 @@ typedef struct Bus {
     
 
     // DEVICES
+    struct MapperInterface *mapper;
     struct State6502 *cpu;
     struct State2C02 *ppu;
     struct Controller *controller_1;

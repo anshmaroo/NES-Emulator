@@ -1,4 +1,5 @@
 #include "bus.h"
+#include "mapper.h"
 #include "2C02.h"
 #include "6502.h"
 #include "controller.h"
@@ -39,12 +40,14 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     }
 
     else if (address >= 0x4020 && address <= 0xffff) {
-        // UNALLOCATED (CARTRIDGE RAM/ROM
-        // if (address >= 0xfffa && address <= 0xfffd) {
-        //     printf("WRITING $%02x to $%04x\n", value, address);
-        // }
-        address -= 0x4020;
-        bus->unmapped[address] = value;
+        if (bus->mapper->allow_cpu_writes) {
+            address -= 0x4020;
+            bus->unmapped[address] = value;
+        }
+
+        else {
+            bus->mapper->switch_prg_banks(bus->mapper, bus, address, value);
+        }
     }
 }
 
@@ -236,6 +239,7 @@ Bus *InitBus(void) {
     bus->name_table_3 = malloc(0x0400);
     bus->palette = malloc(0x20);
 
+    bus->mapper = NULL;
     bus->cpu = NULL;
     bus->ppu = NULL;
 

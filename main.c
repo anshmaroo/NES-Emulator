@@ -8,37 +8,87 @@
 #include "src/6502.h"
 #include "src/bus.h"
 #include "src/controller.h"
-#include "src/mappers.h"
+#include "src/mapper.h"
+#include "src/mapper_0.h"
+#include "src/mapper_2.h"
 #include "src/window.h"
 
-#define WIDTH 512
-#define HEIGHT 480
+#define SCALE 2
 
 #define FPS 60
 
 int main(int argc, char **argv) {
+    // create device objects
+    Bus *bus = InitBus();
+    MapperInterface *mapper = InitMapper();
     State6502 *cpu = Init6502();
     State2C02 *ppu = Init2C02();
-    Bus *bus = InitBus();
     Controller *controller_1 = InitController();
     Controller *controller_2 = InitController();
 
+    // assign bus to the devices
     cpu->bus = bus;
     ppu->bus = bus;
     controller_1->bus = bus;
     controller_2->bus = bus;
 
+    // assign devices to the bus
+    bus->mapper = mapper;
     bus->cpu = cpu;
     bus->ppu = ppu;
     bus->controller_1 = controller_1;
     bus->controller_2 = controller_2;
 
-    // load game's program rom and chr rom
-    nrom(bus, argv[1]);
+    // load the rom into a buffer
+    FILE *rom = fopen(argv[1], "rb");
+
+    if (!rom) {
+        fprintf(stderr, "Unable to open rom %s.\n", argv[1]);
+        return 1;
+    }
+
+    // get file length
+    fseek(rom, 0, SEEK_END);
+    int file_size = ftell(rom);
+    fseek(rom, 0, SEEK_SET);
+
+    // create buffer and allocate memory
+    mapper->buffer = (uint8_t *)malloc(file_size + 1);
+    if (!mapper->buffer) {
+        fprintf(stderr, "Memory error!");
+        fclose(rom);
+        return 1;
+    }
+
+    // read file contents into buffer
+    fread(mapper->buffer, file_size, 1, rom);
+    fclose(rom);
+
+    // get the right mapper and set correct functions
+    switch ((mapper->buffer[7] & 0xf0) | (mapper->buffer[6] >> 0x4)) {
+        case 0:
+            // mapper interface for NROM
+            mapper->initialize = nrom_initialize;
+            mapper->switch_prg_banks = nrom_switch_prg_banks;
+            break;
+
+        case 2:
+            // mapper interface for UXROM
+            mapper->initialize = uxrom_initialize;
+            mapper->switch_prg_banks = uxrom_switch_prg_banks;
+            break;
+
+        default:
+            exit(0);
+            break;
+    }
+
+    // initialize addressable space
+    mapper->initialize(mapper, bus);
 
     // set up SDL
     init_SDL();
-    SDL_Window *window = create_window(argv[1], SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT);
+    SDL_Window *window = create_window(argv[1], SDL_WINDOWPOS_CENTERED, 256 * SCALE, 240 * SCALE);
 
     SDL_Event event;
     bool quit = false;
@@ -66,7 +116,6 @@ int main(int argc, char **argv) {
     clock_t start = clock();
     clock_t diff = clock() - start;
     while (!quit) {
-
         // progress logic
         clock_bus(bus, window);
 
@@ -78,7 +127,7 @@ int main(int argc, char **argv) {
             while (((diff * 1000) / CLOCKS_PER_SEC) < (1000.0 / FPS)) {
                 diff = clock() - start;
             }
-            
+
             start = clock();
             diff = clock() - start;
 
@@ -91,11 +140,11 @@ int main(int argc, char **argv) {
                             quit = true;
                             free(cpu);
                             free(ppu);
+                            free(mapper);
                             free(bus);
                             free(controller_1);
                             free(window);
                             break;
-
                     }
                 }
             }
