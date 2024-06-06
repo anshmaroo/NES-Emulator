@@ -11,6 +11,7 @@
 #include "src/mapper.h"
 #include "src/mapper_0.h"
 #include "src/mapper_2.h"
+#include "src/mapper_3.h"
 #include "src/window.h"
 
 #define SCALE 2
@@ -65,17 +66,27 @@ int main(int argc, char **argv) {
     fclose(rom);
 
     // get the right mapper and set correct functions
-    switch ((mapper->buffer[7] & 0xf0) | (mapper->buffer[6] >> 0x4)) {
+    mapper->mapper_number = (mapper->buffer[7] & 0xf0) | (mapper->buffer[6] >> 0x4);
+    switch (mapper->mapper_number) {
         case 0:
             // mapper interface for NROM
             mapper->initialize = nrom_initialize;
-            mapper->switch_prg_banks = nrom_switch_prg_banks;
+            mapper->switch_prg_banks = NULL;
+            mapper->switch_chr_banks = NULL;
             break;
 
         case 2:
             // mapper interface for UXROM
             mapper->initialize = uxrom_initialize;
             mapper->switch_prg_banks = uxrom_switch_prg_banks;
+            mapper->switch_chr_banks = NULL;
+            break;
+        
+        case 3:
+            // mapper interface for CNROM
+            mapper->initialize = cnrom_initialize;
+            mapper->switch_prg_banks = NULL;
+            mapper->switch_chr_banks = cnrom_switch_chr_banks;
             break;
 
         default:

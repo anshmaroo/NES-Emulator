@@ -1,8 +1,9 @@
 #include "bus.h"
-#include "mapper.h"
+
 #include "2C02.h"
 #include "6502.h"
 #include "controller.h"
+#include "mapper.h"
 
 void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     if (address <= 0x1fff) {
@@ -46,7 +47,18 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
         }
 
         else {
-            bus->mapper->switch_prg_banks(bus->mapper, bus, address, value);
+            switch (bus->mapper->mapper_number) {
+                case 0:
+                    break;
+
+                case 2:
+                    bus->mapper->switch_prg_banks(bus->mapper, bus, address, value);
+                    break;
+                
+                case 3:
+                    bus->mapper->switch_chr_banks(bus->mapper, bus, address, value & 0x2);
+                    break;
+            }
         }
     }
 }
@@ -117,7 +129,7 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     }
 
     else if (address <= 0x27ff) {
-         address &= 0x03ff;
+        address &= 0x03ff;
         if (bus->ppu->mirror_mode == 0)
             bus->name_table_0[address] = value;
         else
@@ -167,7 +179,7 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
     }
 
     else if (address <= 0x27ff) {
-         address &= 0x03ff;
+        address &= 0x03ff;
         if (bus->ppu->mirror_mode == 0)
             value = bus->name_table_0[address];
         else
@@ -202,9 +214,7 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
     return value;
 }
 
-
 void clock_bus(Bus *bus, SDL_Window *window) {
-    
     clock_ppu(bus->ppu, window);
     // printf("ppu->scanline = %d\n", bus->ppu->scanline);
     // printf("ppu->cycles = %d\n", bus->ppu->cycles);
@@ -215,12 +225,9 @@ void clock_bus(Bus *bus, SDL_Window *window) {
     if (bus->ppu->nmi && !bus->ppu->oamdma_write) {
         bus->ppu->nmi = false;
         nmi(bus->cpu);
-        
-
     }
 
     bus->system_cycles++;
-    
 }
 
 Bus *InitBus(void) {

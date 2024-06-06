@@ -6,6 +6,9 @@
 // mapper interface
 typedef struct MapperInterface {
 
+    // number
+    uint16_t mapper_number;
+
     // rom buffer
     uint8_t *buffer;
 
@@ -17,6 +20,8 @@ typedef struct MapperInterface {
 
     // dynamic bank switching
     void (*switch_prg_banks) (struct MapperInterface *mapper, Bus *bus, uint16_t current_address, uint8_t prg_bank);
+    void (*switch_chr_banks) (struct MapperInterface *mapper, Bus *bus, uint16_t current_address, uint8_t chr_bank);
+    
 
 } MapperInterface;
 #endif
