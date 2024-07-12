@@ -8,8 +8,7 @@ Not yet implemented: Audio, second controller, some games in the above mappers.
 
 ## Demos
 
-![](gifs/mario.gif) 
-![](gifs/zelda.gif)
-![](gifs/ducktales.gif)
-![](gifs/tetris.gif)
-
+<img src="https://github.com/amaroo2006/NES-Emulator/blob/main/gifs/mario.gif" width="50%"></img>
+<img src="https://github.com/amaroo2006/NES-Emulator/blob/main/gifs/zelda.gif" width="50%"></img>
+<img src="https://github.com/amaroo2006/NES-Emulator/blob/main/gifs/tetris.gif" width="50%"></img>
+<img src="https://github.com/amaroo2006/NES-Emulator/blob/main/gifs/ducktales.gif" width="50%"></img>
