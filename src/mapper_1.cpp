@@ -27,7 +27,7 @@ void Mapper_1::initialize() {
     const size_t end_index = 0x3FDF;
     const size_t num_bytes = end_index - start_index + 1;
 
-    char *save_file = (char *) malloc(sizeof(char) * (strlen(game) + 4));
+    char *save_file = (char *)malloc(sizeof(char) * (strlen(game) + 4));
     strcpy(save_file, game);
     strcat(save_file, ".save");
 
@@ -36,18 +36,19 @@ void Mapper_1::initialize() {
     if (file == NULL) {
         perror("Failed to open file");
         // exit(EXIT_FAILURE);
-    }
+    } 
+    
+    else {
+        if (fread(this->bus->unmapped + start_index, 1, num_bytes, file) != num_bytes) {
+            perror("Failed to read from file");
+            fclose(file);
+            // exit(EXIT_FAILURE);
+        }
 
-    if (fread(this->bus->unmapped + start_index, 1, num_bytes, file) != num_bytes) {
-        perror("Failed to read from file");
         fclose(file);
-        // exit(EXIT_FAILURE);
     }
 
-
-    fclose(file);
-
-
+    printf("YES");
     allow_cpu_writes = false;
 
     // LOAD CHR ROM
@@ -57,7 +58,6 @@ void Mapper_1::initialize() {
             ppu_write_to_bus(bus, i, buffer[i + address_offset]);
         }
     }
-
 
     // set mirroring
     set_mirror_mode(bus->ppu, buffer[6] & 0x1);
@@ -212,7 +212,7 @@ void Mapper_1::cleanup() {
     const size_t num_bytes = end_index - start_index + 1;
 
     // Open the file for writing in binary mode
-    char *save_file = (char *) malloc(sizeof(char) * (strlen(game) + 4));
+    char *save_file = (char *)malloc(sizeof(char) * (strlen(game) + 4));
     strcpy(save_file, game);
     strcat(save_file, ".save");
     FILE *file = fopen(save_file, "wb");
