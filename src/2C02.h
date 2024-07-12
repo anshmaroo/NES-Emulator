@@ -2,6 +2,11 @@
 #include <stdbool.h>
 #include "window.h"
 
+#define SINGLE_SCREEN_LOWER 1
+#define SINGLE_SCREEN_UPPER 0  
+#define VERTICAL 2
+#define HORIZONTAL 3 
+
 typedef struct Control {
     bool nmi_enable;
     bool master_slave_select;
@@ -58,8 +63,8 @@ typedef union loopy_register {
     struct  {
         uint16_t coarse_x : 5;
         uint16_t coarse_y : 5;
-        uint16_t nametable_y : 1;
         uint16_t nametable_x : 1;
+        uint16_t nametable_y : 1;
         uint16_t fine_y : 3; 
         uint16_t unused : 1;
     };
@@ -87,7 +92,7 @@ typedef struct State2C02 {
     OAMdma oamdma;
 
     // MIRRORING
-    bool mirror_mode;
+    int mirror_mode;
 
     // INTERNAL REGISTERS
     loopy_register vram_address;
@@ -177,7 +182,7 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address);
  * @param ppu 
  * @param mirror_mode 
  */
-void set_mirror_mode(State2C02 *ppu, bool mirror_mode);
+void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode);
 
 
 /**
