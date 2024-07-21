@@ -1114,8 +1114,12 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x31:  // AND ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = cpu_read_from_bus(cpu->bus, (opcode[1] + 1) & 0xff << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t t = cpu_read_from_bus(cpu->bus, cpu->pc);
+            uint16_t lo = cpu_read_from_bus(cpu->bus, t & 0x00FF);
+            uint16_t hi = cpu_read_from_bus(cpu->bus, (t + 1) & 0x00FF);
+
+            uint16_t address = (hi << 8) | lo;
+            address += cpu->y;
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
