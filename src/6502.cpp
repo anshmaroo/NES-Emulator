@@ -1,8 +1,8 @@
-#include "bus.hpp"
 #include "6502.h"
+
 #include "2C02.h"
 #include "Disassemble6502.h"
-
+#include "bus.hpp"
 
 /************************ CREATE OBJECT ************************/
 
@@ -15,7 +15,7 @@ uint8_t prev_sp = 0;
  * @return State6502*
  */
 State6502 *Init6502(void) {
-    State6502 *cpu = (State6502 *) malloc(sizeof(State6502));
+    State6502 *cpu = (State6502 *)malloc(sizeof(State6502));
 
     cpu->a = 0;
     cpu->x = 0;
@@ -274,7 +274,6 @@ static uint8_t pop(State6502 *cpu) {
     cpu->sp++;
     uint8_t value = cpu_read_from_bus(cpu->bus, (0x0100 | cpu->sp));
     return value;
-    
 }
 
 /**
@@ -507,7 +506,7 @@ static inline void adc(State6502 *cpu, uint8_t value) {
     // The overflow flag is set when the sign of the addends is the same and
     // differs from the sign of the sum
     cpu->sr.v = ~(cpu->a ^ value) & (cpu->a ^ sum) & 0x80;
-    
+
     update_zn(cpu, sum);
     cpu->a = sum;
 }
@@ -762,12 +761,9 @@ static inline void isc(State6502 *cpu, uint16_t address) {
     sbc(cpu, cpu_read_from_bus(cpu->bus, address));
 }
 
-
 /************************ EMULATION ************************/
 
 int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
-    
-    
     if (DEBUG) {
         printf("%s\n", Disassemble6502Op(opcode, cpu->pc));
     }
@@ -881,7 +877,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             slo(cpu, address);
             break;
         }
-
 
         case 0x10:  // BPL $oper (relative)
         {
@@ -1005,7 +1000,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0x20:  // JSR $oper $oper (absolute)
         {
             push_16(cpu, cpu->pc + 2);
@@ -1111,7 +1105,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0x30:  // BMI (relative)
         {
             if (cpu->sr.n == 1)
@@ -1126,6 +1119,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
+
 
         case 0x32:  // JAM
         {
@@ -1232,7 +1226,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0x40:  // RTI
         {
             set_status_register(cpu, pop(cpu));
@@ -1336,7 +1329,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0x50:  // BVC $oper (relative)
         {
             if (cpu->sr.v == 0)
@@ -1457,7 +1449,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0x60:  // RTS (implied)
         {
             uint16_t address = pop_16(cpu);
@@ -1537,8 +1528,11 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         case 0x6c:  // JMP ($oper $oper) (indirect)
         {
             uint16_t index = (opcode[2] << 8) | opcode[1];
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (uint16_t) (index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
-            // printf("address = %04x\n", address);
+            uint16_t address = (cpu_read_from_bus(cpu->bus, (uint16_t)(index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
+            if (index & 0xff == 0xff) {
+                address = (cpu_read_from_bus(cpu->bus, (uint16_t)(index & 0xff00)) << 8) | cpu_read_from_bus(cpu->bus, index);
+            }
+
             jump(cpu, address);
             break;
         }
@@ -1557,7 +1551,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0x6f:  // RRA $oper $oper (absolute)
         {
             uint16_t address = (opcode[2] << 8 | opcode[1]);
@@ -1685,7 +1678,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0x80:  // NOP
         {
             break;
@@ -1786,7 +1778,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-       
         case 0x90:  // BCC (relative)
         {
             if (cpu->sr.c == 0)
@@ -1907,7 +1898,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0xa0:  // LDY #$oper (immediate)
         {
             ldy(cpu, opcode[1]);
@@ -2010,7 +2000,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0xb0:  // BCS (relative)
         {
             if (cpu->sr.c == 1)
@@ -2148,7 +2137,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        
         case 0xc0:  // CPY #$oper (immediate)
         {
             cmp(cpu, cpu->y, opcode[1]);
@@ -2252,8 +2240,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             dcp(cpu, address);
             break;
         }
-       
-       
+
         case 0xd0:  // BNE (relative)
         {
             if (cpu->sr.z == 0)
@@ -2273,7 +2260,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         {
             break;
         }
-        
+
         case 0xd3:  // DCP ($oper), Y (indirect, Y-indexed)
         {
             uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
@@ -2373,7 +2360,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             dcp(cpu, address);
             break;
         }
-
 
         case 0xe0:  // CPX #$oper (immediate)
         {
@@ -2475,8 +2461,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             isc(cpu, address);
             break;
         }
-       
-       
+
         case 0xf0:  // BEQ $oper (relative)
         {
             if (cpu->sr.z == 1)
@@ -2505,7 +2490,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-        case 0xf4:  // NOP 
+        case 0xf4:  // NOP
         {
             break;
         }
@@ -2597,7 +2582,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-
         default: {
             printf("ERROR: UNIMPLEMENTED INSTRUCTION %02x.\n", opcode[0]);
             break;
@@ -2611,9 +2595,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         printf("\tA $%02x X $%02x Y $%02x SP %04x PC %04x\n", cpu->a, cpu->x,
                cpu->y, cpu->sp, cpu->pc);
     }
-    
-    
-    
+
     return 0;
 }
 
