@@ -35,7 +35,7 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
                 bus->poll_input1 = 0;
             }
         }
-        
+
         else {
             address &= 0x0014;
             bus->apu_io_registers[address] = value;
@@ -103,16 +103,12 @@ uint8_t cpu_read_from_bus(Bus *bus, uint16_t address) {
                 // printf("STROBE READ = %02x\n", value);
             }
 
-        } 
+        }
 
         else if (address = 0x4017) {
             value = 0;
         }
-        
-        else {
-            address &= 0x0014;
-            value = bus->apu_io_registers[address];
-        }
+
     }
 
     else if (address >= 0x4020 && address <= 0xffff) {
@@ -137,12 +133,12 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
         if (bus->ppu->mirror_mode == SINGLE_SCREEN_LOWER) {
             address &= 0x03ff;
             bus->name_table_0[address] = value;
-        } 
+        }
 
         else if (bus->ppu->mirror_mode == SINGLE_SCREEN_UPPER) {
             address &= 0x03ff;
             bus->name_table_1[address] = value;
-        } 
+        }
 
         else {
             if (address <= 0x23ff) {
@@ -176,10 +172,14 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
     else if (address >= 0x3f00 && address <= 0x3fff) {
         address &= 0x1f;
 
-        if (address == 0x0010) address = 0x0000;
-		if (address == 0x0014) address = 0x0004;
-		if (address == 0x0018) address = 0x0008;
-		if (address == 0x001C) address = 0x000C;
+        if (address == 0x0010)
+            address = 0x0000;
+        if (address == 0x0014)
+            address = 0x0004;
+        if (address == 0x0018)
+            address = 0x0008;
+        if (address == 0x001C)
+            address = 0x000C;
 
         bus->palette[address] = value;
         // GLOBAL_PALETTE[address] = value;
@@ -201,12 +201,12 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
         if (bus->ppu->mirror_mode == SINGLE_SCREEN_LOWER) {
             address &= 0x03ff;
             value = bus->name_table_0[address];
-        } 
+        }
 
         else if (bus->ppu->mirror_mode == SINGLE_SCREEN_UPPER) {
             address &= 0x03ff;
             value = bus->name_table_1[address];
-        } 
+        }
 
         else {
             if (address <= 0x23ff) {
@@ -236,14 +236,18 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
             }
         }
     }
-    
+
     else if (address >= 0x3f00 && address <= 0x3fff) {
         address &= 0x001f;
 
-        if (address == 0x0010) address = 0x0000;
-		if (address == 0x0014) address = 0x0004;
-		if (address == 0x0018) address = 0x0008;
-		if (address == 0x001C) address = 0x000C;
+        if (address == 0x0010)
+            address = 0x0000;
+        if (address == 0x0014)
+            address = 0x0004;
+        if (address == 0x0018)
+            address = 0x0008;
+        if (address == 0x001C)
+            address = 0x000C;
 
         value = bus->palette[address];
         // printf("PALETTE VALUE = %04x\n", address);
@@ -263,7 +267,6 @@ void clock_bus(Bus *bus, SDL_Window *window) {
     if (bus->ppu->status.vblank && bus->ppu->nmi && !bus->ppu->oamdma_write) {
         bus->ppu->nmi = false;
         nmi(bus->cpu);
-        
     }
 
     bus->system_cycles++;
