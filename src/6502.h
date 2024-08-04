@@ -52,6 +52,7 @@ static const uint8_t OPCODES_BYTES[256] = {
 };
 
 
+
 typedef struct StatusRegister {
     bool n;  // bit 7, 1 = negative
     bool v;  // bit 6, 1 = overflow
@@ -91,6 +92,24 @@ typedef struct State6502 {
  * @return State6502*
  */
 State6502 *Init6502(void);
+
+/************************ ADDRESSING MODES ************************/
+
+uint16_t zero_page(State6502 *cpu, uint8_t *opcode);
+
+uint16_t zero_page_x(State6502 *cpu, uint8_t *opcode);
+
+uint16_t zero_page_y(State6502 *cpu, uint8_t *opcode);
+
+uint16_t absolute(State6502 *cpu, uint8_t *opcode);
+
+uint16_t absolute_x(State6502 *cpu, uint8_t *opcode);
+
+uint16_t absolute_y(State6502 *cpu, uint8_t *opcode);
+
+uint16_t x_indexed_indirect(State6502 *cpu, uint8_t *opcode);
+
+uint16_t indirect_y_indexed(State6502 *cpu, uint8_t *opcode);
 
 /************************ STATUS REGISTER FUNCTIONS ************************/
 /**

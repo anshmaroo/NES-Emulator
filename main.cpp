@@ -15,13 +15,14 @@
 #include "src/mapper_3.hpp"
 #include "src/window.h"
 
-#define SCALE 2
 
 int main(int argc, char **argv) {
 
+    // get basic game info
     char *game = (char *) malloc(sizeof(char) * 200);
     strcpy(game, argv[1]);
     game[strlen(argv[1]) - 4] = '\0';
+    
 
     // create device objects
     Bus *bus = InitBus();
@@ -100,9 +101,13 @@ int main(int argc, char **argv) {
     bus->mapper = mapper;
     mapper->initialize();
 
-    // set up SDL
+    // set up SDL and window
+    int scale = 2;
+    if (argc == 3) {
+        scale = atoi(argv[2]);
+    }
     init_SDL();
-    SDL_Window *window = create_window(game, SDL_WINDOWPOS_CENTERED, 256 * SCALE, 240 * SCALE);
+    SDL_Window *window = create_window(game, SDL_WINDOWPOS_CENTERED, 256 * scale, 240 * scale);
 
     SDL_Event event;
     bool quit = false;

@@ -221,7 +221,7 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
             value = ppu->data_buffer;
             ppu->data_buffer = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
             if (ppu->vram_address.reg >= 0x3f00)
-                value = ppu_read_from_bus(ppu->bus, ppu->vram_address.reg);
+                value = ppu->data_buffer;
             ppu->vram_address.reg += (ppu->control.vram_increment_mode == 1) ? 32 : 1;
 
             break;

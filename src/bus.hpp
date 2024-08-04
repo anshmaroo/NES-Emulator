@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include "mapper.hpp"
 
-#ifndef BUS_H
-#define BUS_H
+#ifndef BUS_HPP
+#define BUS_HPP
 typedef struct Bus {
     // CPU ADDRESSES
     uint8_t *cpu_ram;           // $0000–$07FF, mirrored until $1FFF

@@ -1,8 +1,8 @@
 #include "6502.h"
-
 #include "2C02.h"
 #include "Disassemble6502.h"
 #include "bus.hpp"
+
 
 /************************ CREATE OBJECT ************************/
 
@@ -40,6 +40,81 @@ State6502 *Init6502(void) {
 
     return cpu;
 }
+
+
+/************************ ADDRESSING MODES ************************/
+
+uint16_t zero_page(State6502 *cpu, uint8_t *opcode) {
+    return opcode[1];
+}
+
+uint16_t zero_page_x(State6502 *cpu, uint8_t *opcode) {
+    uint8_t address;
+    if ((opcode[1] >> 7) & 1) {
+        address = (cpu->x - (~opcode[1] + 1)) & 0xff;
+    } 
+    
+    else {
+        address = (cpu->x + opcode[1]) & 0xff;
+    } 
+
+    return address;
+}
+
+uint16_t zero_page_y(State6502 *cpu, uint8_t *opcode) {
+    uint8_t address;
+    if ((opcode[1] >> 7) & 1) {
+        address = (cpu->y - (~opcode[1] + 1)) & 0xff;
+    } 
+    
+    else {
+        address = (cpu->y + opcode[1]) & 0xff;
+    }
+
+    return address;
+}
+
+uint16_t absolute(State6502 *cpu, uint8_t *opcode) {
+    return (opcode[2] << 8) | (opcode[1]);
+}
+
+uint16_t absolute_x(State6502 *cpu, uint8_t *opcode) {	
+    uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+    if ((address & 0xFF00) != (opcode[2] << 8))
+		cpu->cycles++;
+    
+    return address;
+	
+}
+
+uint16_t absolute_y(State6502 *cpu, uint8_t *opcode) {
+    uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+    if ((address & 0xFF00) != (opcode[2] << 8))
+		cpu->cycles++;
+
+    return address;
+
+}
+
+uint16_t x_indexed_indirect(State6502 *cpu, uint8_t *opcode) {
+    uint8_t index = (opcode[1] + cpu->x) & 0xff;
+    return (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+}
+
+uint16_t indirect_y_indexed(State6502 *cpu, uint8_t *opcode) {
+    uint16_t t = opcode[1];
+	uint16_t lo = cpu_read_from_bus(cpu->bus, t & 0x00FF);
+	uint16_t hi = cpu_read_from_bus(cpu->bus, (t + 1) & 0x00FF);
+
+	uint16_t address = (hi << 8) | lo;
+	address += cpu->y;
+	
+	if ((address & 0xFF00) != (hi << 8))
+		cpu->cycles++;
+
+    return address;
+}
+
 
 /************************ STATUS REGISTER FUNCTIONS ************************/
 /**
@@ -782,8 +857,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x01:  // or_a, (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             or_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -795,8 +869,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x03:  // SLO (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             slo(cpu, address);
             break;
         }
@@ -808,21 +881,22 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x05:  // or_a, $oper (zero-page)
         {
-            uint8_t address = opcode[1];
+            uint16_t address = zero_page(cpu, opcode);
             or_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x06:  // ASL, $oper (zero-page)
         {
-            uint8_t address = opcode[1];
+            uint16_t address = zero_page(cpu, opcode);
             asl_memory(cpu, address);
             break;
         }
 
         case 0x07:  // SLO $oper (zero-page)
         {
-            slo(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            slo(cpu, address);
             break;
         }
 
@@ -888,8 +962,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x11:  // or_a ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             or_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -901,8 +974,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x13:  // SLO ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             slo(cpu, address);
             break;
         }
@@ -914,37 +986,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x15:  // or_a, $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
-
+            uint16_t address = zero_page_x(cpu, opcode);
             or_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x16:  // ASL, $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             asl_memory(cpu, address);
             break;
         }
 
         case 0x17:  // SLO, $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             slo(cpu, address);
             break;
         }
@@ -957,7 +1013,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x19:  // ORA Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             or_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -969,7 +1025,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x1b:  // SLO Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             slo(cpu, address);
             break;
         }
@@ -981,21 +1037,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x1d:  // or_a X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             or_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x1e:  // ASL X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             asl_memory(cpu, address);
             break;
         }
 
         case 0x1f:  // SLO Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             slo(cpu, address);
             break;
         }
@@ -1003,15 +1059,14 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         case 0x20:  // JSR $oper $oper (absolute)
         {
             push_16(cpu, cpu->pc + 2);
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             cpu->pc = address;
             break;
         }
 
         case 0x21:  // AND (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1023,33 +1078,36 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x23:  // RLA (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             rla(cpu, address);
             break;
         }
 
         case 0x24:  // BIT $oper (zero-page)
         {
+            uint16_t address = zero_page(cpu, opcode);
             bit(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
             break;
         }
 
         case 0x25:  // AND $oper (zero-page)
         {
-            and_a(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x26:  // ROL $oper (zero-page)
         {
-            rol_memory(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            rol_memory(cpu, address);
             break;
         }
 
         case 0x27:  // RLA $oper (zero-page)
         {
-            rla(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            rla(cpu, address);
             break;
         }
 
@@ -1079,28 +1137,28 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x2c:  // BIT $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             bit(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x2d:  // AND  $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x2e:  // ROL $oper $oper (asbsolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             rol_memory(cpu, address);
             break;
         }
 
         case 0x2f:  // RLA $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             rla(cpu, address);
             break;
         }
@@ -1114,12 +1172,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x31:  // AND ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t t = cpu_read_from_bus(cpu->bus, cpu->pc);
-            uint16_t lo = cpu_read_from_bus(cpu->bus, t & 0x00FF);
-            uint16_t hi = cpu_read_from_bus(cpu->bus, (t + 1) & 0x00FF);
-
-            uint16_t address = (hi << 8) | lo;
-            address += cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1132,8 +1185,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x33:  // RLA ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = cpu_read_from_bus(cpu->bus, (opcode[1] + 1) & 0xff << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             rla(cpu, address);
             break;
         }
@@ -1145,36 +1197,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x35:  // AND $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x36:  // ROL $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             rol_memory(cpu, address);
             break;
         }
 
         case 0x37:  // RLA $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             rla(cpu, address);
             break;
         }
@@ -1187,7 +1224,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x39:  // AND Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1199,7 +1236,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x3b:  // RLA Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             rla(cpu, address);
             break;
         }
@@ -1211,21 +1248,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x3d:  // AND X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             and_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x3e:  // ROL X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             rol_memory(cpu, address);
             break;
         }
 
         case 0x3f:  // RLA X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             rla(cpu, address);
             break;
         }
@@ -1239,8 +1276,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x41:  // EOR (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1265,20 +1301,22 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x45:  // EOR $oper (zero-page)
         {
-            uint8_t address = opcode[1];
+            uint16_t address = zero_page(cpu, opcode);
             xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x46:  // LSR $oper (zero-page)
         {
-            lsr_memory(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            lsr_memory(cpu, address);
             break;
         }
 
         case 0x47:  // SRE (zero-page)
         {
-            sre(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            sre(cpu, address);
         }
 
         case 0x48:  // PHA (implied)
@@ -1307,28 +1345,28 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x4c:  // JMP $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             jump(cpu, address);
             break;
         }
 
         case 0x4d:  // EOR $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x4e:  // LSR $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             lsr_memory(cpu, address);
             break;
         }
 
         case 0x4f:  // SRE $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             sre(cpu, address);
             break;
         }
@@ -1342,8 +1380,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x51:  // EOR ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1355,8 +1392,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x53:  // SRE ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             sre(cpu, address);
             break;
         }
@@ -1368,36 +1404,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x55:  // EOR  $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x56:  // LSR $oper (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             lsr_memory(cpu, address);
             break;
         }
 
         case 0x57:  // SRE $oper (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             sre(cpu, address);
             break;
         }
@@ -1410,7 +1431,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x59:  // EOR Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1422,7 +1443,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x5b:  // SRE Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             sre(cpu, address);
             break;
         }
@@ -1434,21 +1455,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x5d:  // EOR X, $oper, $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             xor_a(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x5e:  // LSR X, $oper, $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             lsr_memory(cpu, address);
             break;
         }
 
         case 0x5f:  // SRE, $oper, $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             sre(cpu, address);
             break;
         }
@@ -1462,8 +1483,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x61:  // ADC (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             adc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1475,8 +1495,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x63:  // RRA (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             rra(cpu, address);
             break;
         }
@@ -1488,19 +1507,22 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x65:  // ADC $oper (zero-paged)
         {
-            adc(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            adc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x66:  // ROR $oper (zero-paged)
         {
-            ror_memory(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            ror_memory(cpu, address);
             break;
         }
 
         case 0x67:  // RRA (zero-paged)
         {
-            rra(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            rra(cpu, address);
             break;
         }
 
@@ -1543,21 +1565,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x6d:  // ADC $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             adc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x6e:  // ROR $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             ror_memory(cpu, address);
             break;
         }
 
         case 0x6f:  // RRA $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             rra(cpu, address);
             break;
         }
@@ -1571,8 +1593,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x71:  // ADC ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             adc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1584,8 +1605,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x73:  // RRA ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             rra(cpu, address);
             break;
         }
@@ -1597,36 +1617,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x75:  // ADC $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             adc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x76:  // ROR $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             ror_memory(cpu, address);
             break;
         }
 
         case 0x77:  // RRA $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             rra(cpu, address);
             break;
         }
@@ -1639,7 +1644,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x79:  // ADC Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             adc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1651,7 +1656,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x7b:  // RRA Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             rra(cpu, address);
             break;
         }
@@ -1663,21 +1668,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x7d:  // ADC X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             adc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0x7e:  // ROR X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             ror_memory(cpu, address);
             break;
         }
 
         case 0x7f:  // RRA X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             rra(cpu, address);
             break;
         }
@@ -1689,8 +1694,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x81:  // STA X, $oper $oper (x-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             sta(cpu, address);
             break;
         }
@@ -1702,33 +1706,36 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x83:  // SAX X, $oper $oper (x-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             sax(cpu, address);
             break;
         }
 
         case 0x84:  // STY $oper (zero-page)
         {
-            sty(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            sty(cpu, address);
             break;
         }
 
         case 0x85:  // STA $oper (zero-page)
         {
-            sta(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            sta(cpu, address);
             break;
         }
 
         case 0x86:  // STX $oper (zero-page)
         {
-            stx(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            stx(cpu, address);
             break;
         }
 
         case 0x87:  // SAX $oper (zero-page)
         {
-            sax(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            sax(cpu, address);
             break;
         }
 
@@ -1756,28 +1763,28 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x8c:  // STY $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             sty(cpu, address);
             break;
         }
 
         case 0x8d:  // STA $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             sta(cpu, address);
             break;
         }
 
         case 0x8e:  // STX $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             stx(cpu, address);
             break;
         }
 
         case 0x8f:  // SAX $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             sax(cpu, address);
             break;
         }
@@ -1791,8 +1798,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x91:  // STA ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             sta(cpu, address);
             break;
         }
@@ -1804,46 +1810,35 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x93:  // SHA ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             sha(cpu, address);
             break;
         }
 
         case 0x94:  // STY $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             sty(cpu, address);
             break;
         }
 
         case 0x95:  // STA $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             sta(cpu, address);
             break;
         }
 
         case 0x96:  // STX $oper, Y (zero-page, y-indexed)
         {
-            uint8_t address = (cpu->y + opcode[1]) & 0xff;
+            uint16_t address = zero_page_y(cpu, opcode);
             stx(cpu, address);
             break;
         }
 
         case 0x97:  // SAX $oper, Y (zero-page, y-indexed)
         {
-            uint8_t address = (cpu->y + opcode[1]) & 0xff;
+            uint16_t address = zero_page_y(cpu, opcode);
             sax(cpu, address);
             break;
         }
@@ -1856,7 +1851,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x99:  // STA Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             sta(cpu, address);
             break;
         }
@@ -1869,35 +1864,35 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0x9b:  // TAS Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             tas(cpu, address);
             break;
         }
 
         case 0x9c:  // SHY X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             sta(cpu, address);
             break;
         }
 
         case 0x9d:  // STA X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             sta(cpu, address);
             break;
         }
 
         case 0x9e:  // SHX Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             shx(cpu, address);
             break;
         }
 
         case 0x9f:  // SHA  Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             sha(cpu, address);
             break;
         }
@@ -1910,8 +1905,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xa1:  // LDA (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -1924,33 +1918,36 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xa3:  // LAX (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             lax(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xa4:  // LDY $oper (zero-page)
         {
-            ldy(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            ldy(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xa5:  // LDA $oper (zero-page)
         {
-            lda(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xa6:  // LDX $oper (zero-page)
         {
-            ldx(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            ldx(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xa7:  // LAX $oper (zero-page)
         {
-            lax(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            lax(cpu, cpu_read_from_bus(cpu->bus, address));
         }
 
         case 0xa8:  // TAY (implied)
@@ -1978,28 +1975,28 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xac:  // LDY $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             ldy(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xad:  // LDA $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xae:  // LDX $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             ldx(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xaf:  // LAX $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             lax(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2013,8 +2010,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xb1:  // LDA ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2026,32 +2022,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xb3:  // LAX ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             lax(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xb4:  // LDY $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             ldy(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xb5:  // LDA $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2094,7 +2079,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xb9:  // LDA Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2107,21 +2092,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xbb:  // LAS Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             las(cpu, address);
             break;
         }
 
         case 0xbc:  // LDY X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             ldy(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xbd:  // LDA X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             // printf("ADDRESS = $%04x\n", address);
             lda(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
@@ -2129,14 +2114,14 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xbe:  // LDX Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             ldx(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xbf:  // LAX Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             lax(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2149,8 +2134,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xc1:  // CMP (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2162,33 +2146,36 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xc3:  // DCP (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             dcp(cpu, address);
             break;
         }
 
         case 0xc4:  // CPY $oper (zero-page)
         {
-            cmp(cpu, cpu->y, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            cmp(cpu, cpu->y, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xc5:  // CMP $oper (zero-page)
         {
-            cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xc6:  // DEC $oper (zero-page)
         {
-            dec(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            dec(cpu, address);
             break;
         }
 
         case 0xc7:  // DCP $oper (zero-page)
         {
-            dcp(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            dcp(cpu, address);
             break;
         }
 
@@ -2212,35 +2199,35 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xcb:  // DCP Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             dcp(cpu, address);
             break;
         }
 
         case 0xcc:  // CPY $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             cmp(cpu, cpu->y, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xcd:  // CMP $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xce:  // DEC $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             dec(cpu, address);
             break;
         }
 
         case 0xcf:  // DCP // DEC $oper $oper (absolute)
         {
-            uint16_t address = (opcode[2] << 8 | opcode[1]);
+            uint16_t address = absolute(cpu, opcode);
             dcp(cpu, address);
             break;
         }
@@ -2254,8 +2241,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xd1:  // CMP ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2267,8 +2253,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xd3:  // DCP ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             dcp(cpu, address);
             break;
         }
@@ -2280,36 +2265,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xd5:  // CMP $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xd6:  // DEC $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             dec(cpu, address);
             break;
         }
 
         case 0xd7:  // DCP $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             dcp(cpu, address);
             break;
         }
@@ -2322,7 +2292,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xd9:  // CMP Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2334,7 +2304,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xdb:  // DCP Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             dcp(cpu, address);
             break;
         }
@@ -2346,21 +2316,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xdd:  // CMP X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             cmp(cpu, cpu->a, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xde:  // DEC X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             dec(cpu, address);
             break;
         }
 
         case 0xdf:  // DCP X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             dcp(cpu, address);
             break;
         }
@@ -2373,8 +2343,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xe1:  // SBC (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2386,33 +2355,36 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xe3:  // ISC (X, $oper) (X-indexed, indirect)
         {
-            uint8_t index = (opcode[1] + cpu->x) & 0xff;
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1) & 0xff) << 8) | cpu_read_from_bus(cpu->bus, index);
+            uint16_t address = x_indexed_indirect(cpu, opcode);
             isc(cpu, address);
             break;
         }
 
         case 0xe4:  // CPX $oper (zero-page)
         {
-            cmp(cpu, cpu->x, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            cmp(cpu, cpu->x, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xe5:  // SBC $oper (zero-page)
         {
-            sbc(cpu, cpu_read_from_bus(cpu->bus, opcode[1]));
+            uint16_t address = zero_page(cpu, opcode);
+            sbc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xe6:  // INC $oper (zero-page)
         {
-            inc(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            inc(cpu, address);
             break;
         }
 
         case 0xe7:  // ISC $oper (zero-page)
         {
-            isc(cpu, opcode[1]);
+            uint16_t address = zero_page(cpu, opcode);
+            isc(cpu, address);
             break;
         }
 
@@ -2475,8 +2447,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xf1:  // SBC ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2488,8 +2459,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xf3:  // ISC ($oper), Y (indirect, Y-indexed)
         {
-            uint16_t index = (cpu_read_from_bus(cpu->bus, opcode[1] + 1 & 0xff) << 8) | cpu_read_from_bus(cpu->bus, opcode[1]);
-            uint16_t address = index + cpu->y;
+            uint16_t address = indirect_y_indexed(cpu, opcode);
             isc(cpu, address);
             break;
         }
@@ -2501,36 +2471,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xf5:  // SBC $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xf6:  // INC $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             inc(cpu, address);
             break;
         }
 
         case 0xf7:  // ISC $oper, X (zero-page, x-indexed)
         {
-            uint8_t address;
-            if ((opcode[1] >> 7) & 1) {
-                address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-            } else {
-                address = (cpu->x + opcode[1]) & 0xff;
-            }
+            uint16_t address = zero_page_x(cpu, opcode);
             isc(cpu, address);
             break;
         }
@@ -2543,7 +2498,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xf9:  // SBC Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
@@ -2555,7 +2510,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xfb:  // ISC Y, $oper $oper (absolute, y-indexed)
         {
-            uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_y(cpu, opcode);
             isc(cpu, address);
             break;
         }
@@ -2567,21 +2522,21 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
 
         case 0xfd:  // SBC X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             sbc(cpu, cpu_read_from_bus(cpu->bus, address));
             break;
         }
 
         case 0xfe:  // INC
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             inc(cpu, address);
             break;
         }
 
         case 0xff:  // ISC X, $oper $oper (absolute, x-indexed)
         {
-            uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
+            uint16_t address = absolute_x(cpu, opcode);
             isc(cpu, address);
             break;
         }
