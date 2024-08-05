@@ -764,7 +764,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             // reset sprite zero hit flag
             ppu->sprite_zero_rendered = false;
             // render each sprite
-            for (int i = ppu->sprite_count - 1; i > -1; i--) {
+            for (int i = 0; i < ppu->sprite_count; i++) {
                 // check if the correct x location has been reached
                 if (ppu->secondary_oam[i].x == 0) {
                     // get pixel value
@@ -796,6 +796,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                             y = y_start + (i / scale);
                             set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, 0x3f00 | palette_address)]);
                         }
+                        break;
                     }
                 }
             }
