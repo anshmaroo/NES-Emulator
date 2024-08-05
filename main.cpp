@@ -134,17 +134,25 @@ int main(int argc, char **argv) {
     // initialize timers/fps
     clock_t start = clock();
     clock_t diff = clock() - start;
+    
     int fps = 60;
+    if (argc == 4) {
+        fps = atoi(argv[3]);
+    }
+
+    bool paused = false;
 
     while (!quit) {
         // progress logic
-        clock_bus(bus, window);
+        if(!paused)
+            clock_bus(bus, window);
 
-        // read input and redner
+        // read input
         pressed_keys = (uint8_t *)SDL_GetKeyboardState(NULL);
         set_controller(controller_1, pressed_keys);
 
-        if (ppu->scanline == 241 && ppu->cycles == 1) {
+        // render only after vblank
+        if ((!paused && ppu->scanline == 241 && ppu->cycles == 1) || paused) {
             while (((diff * 1000) / CLOCKS_PER_SEC) < (1000.0 / fps)) {
                 diff = clock() - start;
             }
@@ -157,7 +165,7 @@ int main(int argc, char **argv) {
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_KEYDOWN) {
                     switch (event.key.keysym.sym) {
-                        case SDLK_q:
+                        case SDLK_ESCAPE:
                             quit = true;
                             mapper->cleanup();
                             free(cpu);
@@ -167,6 +175,11 @@ int main(int argc, char **argv) {
                             free(controller_1);
                             free(window);
                             break;
+                        
+                        case SDLK_p:
+                            paused = !paused;
+                            break;
+
                     }
                 }
             }
