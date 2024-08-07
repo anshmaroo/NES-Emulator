@@ -10,7 +10,7 @@ void Mapper_1::initialize() {
     this->num_prg_banks = this->buffer[4];
     this->num_chr_banks = this->buffer[5];
 
-    // LOAD PROGRAM ROM
+    // load program rom
     for (int i = 0; i < prg_bank_size; i++) {
         cpu_write_to_bus(bus, 0x8000 + i, this->buffer[0x10 + i]);
     }
@@ -48,7 +48,6 @@ void Mapper_1::initialize() {
         fclose(file);
     }
 
-    printf("YES");
     allow_cpu_writes = false;
 
     // LOAD CHR ROM

@@ -255,6 +255,10 @@ void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode) {
         case 3:
             ppu->mirror_mode = mirror_mode ? VERTICAL : HORIZONTAL;
             break;
+        
+        case 4:
+            ppu->mirror_mode = mirror_mode ? HORIZONTAL : VERTICAL;
+            break;
     }
 }
 
@@ -830,6 +834,7 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             ppu->status.vblank = 1;
             if (ppu->control.nmi_enable)
                 ppu->nmi = true;
+            
         }
     }
 

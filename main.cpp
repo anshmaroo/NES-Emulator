@@ -13,6 +13,7 @@
 #include "src/mapper_1.hpp"
 #include "src/mapper_2.hpp"
 #include "src/mapper_3.hpp"
+#include "src/mapper_4.hpp"
 #include "src/window.h"
 
 
@@ -90,6 +91,11 @@ int main(int argc, char **argv) {
         case 3:
             // mapper interface for CNROM
             mapper = new Mapper_3(game, mapper_number, buffer, bus);
+            break;
+
+        case 4:
+            // mapper interface for MMC3
+            mapper = new Mapper_4(game, mapper_number, buffer, bus);
             break;
 
         default:

@@ -49,22 +49,7 @@ void cpu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
         }
 
         else {
-            switch (bus->mapper->mapper_number) {
-                case 0:
-                    break;
-
-                case 1:
-                    bus->mapper->handle_write(address, value);
-                    break;
-
-                case 2:
-                    bus->mapper->handle_write(address, value);
-                    break;
-
-                case 3:
-                    bus->mapper->handle_write(address, value);
-                    break;
-            }
+            bus->mapper->handle_write(address, value);
         }
     }
 }
@@ -267,6 +252,15 @@ void clock_bus(Bus *bus, SDL_Window *window) {
     if (bus->ppu->status.vblank && bus->ppu->nmi && !bus->ppu->oamdma_write) {
         bus->ppu->nmi = false;
         nmi(bus->cpu);
+    }
+
+    if (bus->previous_vram_bank == 0 && bus->ppu->vram_address.reg >= 0x1000) {
+        bus->previous_vram_bank = 1;
+        bus->mapper->a12_rising_edge();
+    }
+
+    else if (bus->previous_vram_bank == 1 && bus->ppu->vram_address.reg < 0x1000) {
+        bus->previous_vram_bank = 0;
     }
 
     bus->system_cycles++;

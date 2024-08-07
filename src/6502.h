@@ -379,7 +379,7 @@ void reset(State6502 *cpu);
  *
  * @param cpu
  */
-static inline void irq(State6502 *cpu);
+void irq(State6502 *cpu);
 
 /**
  * @brief interrupt an interrupt

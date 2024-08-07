@@ -7,4 +7,5 @@ class Mapper_0 : public Mapper {
 
         }
         void initialize() override;
+        
 };

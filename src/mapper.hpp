@@ -28,6 +28,8 @@ class Mapper {
         Mapper(char *game, uint8_t mapper_number, uint8_t *buffer, Bus *bus);
         virtual void initialize() {};
         virtual void handle_write(uint16_t address, uint8_t value) {};
+        virtual void a12_rising_edge() {};
         virtual void cleanup() {};
+        
 };
 #endif
