@@ -148,25 +148,21 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
         case 0x06:  // PPUADDR
 
             if (ppu->w == 0) {
-                ppu->tram_address.reg = (uint16_t)((value & 0x3F) << 8) | (ppu->tram_address.reg & 0x00FF);
+                ppu->tram_address.reg = (uint16_t)((value & 0x3F) << 8) | (ppu->tram_address.reg & ~0xff00);
                 ppu->w = 1;
             }
 
             else if (ppu->w == 1) {
                 ppu->tram_address.reg = (ppu->tram_address.reg & 0xFF00) | value;
                 ppu->vram_address.reg = ppu->tram_address.reg;
-
                 ppu->w = 0;
             }
             break;
 
         case 0x07:  // PPUDATA
             ppu->ppudata.data = value;
-
             ppu_write_to_bus(ppu->bus, ppu->vram_address.reg, value);
-
             ppu->vram_address.reg += ppu->control.vram_increment_mode ? 32 : 1;
-
             break;
 
         case 0x4014:  // OAMDMA
@@ -255,7 +251,7 @@ void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode) {
         case 3:
             ppu->mirror_mode = mirror_mode ? VERTICAL : HORIZONTAL;
             break;
-        
+
         case 4:
             ppu->mirror_mode = mirror_mode ? HORIZONTAL : VERTICAL;
             break;
@@ -569,22 +565,23 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             ppu->status.sprite_zero_hit = 0;
         }
 
+        // background tile fetches
         // background graphics
-        if ((ppu->cycles >= 2 && ppu->cycles < 258) || (ppu->cycles >= 321 && ppu->cycles < 338)) {
-            // shift to next pixel
-            update_background_shifters(ppu);
-            update_sprite_shifters(ppu);
+        if ((ppu->cycles >= 2 && ppu->cycles < 257) || (ppu->cycles >= 321 && ppu->cycles < 338)) {
+            if (!ppu->status.vblank && (ppu->mask.background_enable || ppu->mask.sprite_enable)) {
+                // shift to next pixel
+                update_background_shifters(ppu);
+                update_sprite_shifters(ppu);
 
-            switch ((ppu->cycles - 1) % 8) {
-                case 0:
+                if ((ppu->cycles - 1) % 8 == 0) {
                     // start of new pixel, start next pixel
                     load_background_shifters(ppu);
 
                     // get index of pattern table
                     ppu->bg_next_tile_index = ppu_read_from_bus(ppu->bus, 0x2000 | ppu->vram_address.nametable_y * 0x800 | ppu->vram_address.nametable_x * 0x400 | ppu->vram_address.coarse_y * 32 | ppu->vram_address.coarse_x);
-                    break;
+                }
 
-                case 2:
+                else if ((ppu->cycles - 3) % 8 == 0) {
                     // get attribute table byte for current pixel
                     ppu->bg_next_tile_attribute = ppu_read_from_bus(ppu->bus, 0x23C0 | (ppu->vram_address.nametable_y << 11) | (ppu->vram_address.nametable_x << 10) | ((ppu->vram_address.coarse_y >> 2) << 3) | (ppu->vram_address.coarse_x >> 2));
 
@@ -594,23 +591,22 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                         ppu->bg_next_tile_attribute >>= 2;
 
                     ppu->bg_next_tile_attribute &= 0x3;
+                }
 
-                    break;
-
-                case 4:
+                else if ((ppu->cycles - 5) % 8 == 0) {
                     // get pattern table byte low for current pixel
                     ppu->bg_next_tile_lsb = ppu_read_from_bus(ppu->bus, (ppu->control.background_tile_select * 0x1000) | ((uint16_t)ppu->bg_next_tile_index * 0x10) | (ppu->vram_address.fine_y));
-                    break;
+                }
 
-                case 6:
+                else if ((ppu->cycles - 7) % 8 == 0) {
                     // get pattern table byte high for current pixel
                     ppu->bg_next_tile_msb = ppu_read_from_bus(ppu->bus, (ppu->control.background_tile_select * 0x1000) | ((uint16_t)ppu->bg_next_tile_index * 0x10) | (ppu->vram_address.fine_y) + 8);
-                    break;
+                }
 
-                case 7:
+                else if ((ppu->cycles) % 8 == 0) {
                     // increment x scroll. this should also increase vram address
                     increment_scroll_x(ppu);
-                    break;
+                }
             }
         }
 
@@ -662,54 +658,112 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             ppu->status.sprite_overflow = (ppu->sprite_count > 8);
         }
 
-        // load sprite shifters
-        if (ppu->cycles == 340) {
-            for (int i = 0; i < ppu->sprite_count; i++) {
-                bool flip_vertical = (ppu->secondary_oam[i].attributes >> 7) & 0x1;
-                bool flip_horizontal = (ppu->secondary_oam[i].attributes >> 6) & 0x1;
+        // garbage nametable reads, load sprite shifters
+        if (ppu->cycles >= 257 && ppu->cycles < 321) {
+            if (!ppu->status.vblank && ppu->mask.background_enable || ppu->mask.sprite_enable) {
+                // garbage NT read
+                if ((ppu->cycles - 257) % 8 == 0)
+                    ppu_read_from_bus(ppu->bus, 0x2000 | (ppu->vram_address.reg & 0x0FFF));
+                // garbage AT read
+                else if ((ppu->cycles - 259) % 8 == 0)
+                    ppu_read_from_bus(ppu->bus, 0x23C0 | (ppu->vram_address.reg & 0x0C00) | ((ppu->vram_address.reg >> 4) & 0x38) | ((ppu->vram_address.reg >> 2) & 0x07));
+                // sprite shifters
+                else if ((ppu->cycles - 261) % 8 == 0) {
+                    int i = (ppu->cycles - 257) / 8;
+                    bool flip_vertical = (ppu->secondary_oam[i].attributes & 0x80) > 0;
+                    bool flip_horizontal = (ppu->secondary_oam[i].attributes >> 6) & 0x1;
 
-                if (ppu->control.sprite_height == 0) {
-                    uint8_t y_offset = flip_vertical ? (7 - (ppu->scanline - ppu->secondary_oam[i].y)) : (ppu->scanline - ppu->secondary_oam[i].y);
-                    uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
+                    if (ppu->control.sprite_height == 0) {
+                        uint8_t y_offset = flip_vertical ? (7 - (ppu->scanline - ppu->secondary_oam[i].y)) : (ppu->scanline - ppu->secondary_oam[i].y);
+                        uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
 
-                    ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset);
-                    ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset + 8);
-
-                }
-
-                else {
-                    // TODO - 8x16 SPRITES
-                    uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
-                    uint8_t y_offset = (ppu->scanline - ppu->secondary_oam[i].y);
-                    if(!flip_vertical) {
-                        if (ppu->scanline - ppu->secondary_oam[i].y < 8) {
-                            ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) + y_offset);
-                            ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) + y_offset + 8);
-                        } 
-                        
-                        else {
-                            ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) + 16 + (y_offset % 8));
-                            ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) + 16 + (y_offset % 8) + 8);
-                        }
-                    } 
+                        ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset);
+                    }
 
                     else {
-                        if (ppu->scanline - ppu->secondary_oam[i].y < 8) {
-                            ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) + 16 + (7 - (y_offset % 8)));
-                            ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) + 16 + (7 - (y_offset % 8)) + 8);
-                        } 
-                        
+                        // 8x16 mode
+                        uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
+                        uint8_t y_offset = (ppu->scanline - ppu->secondary_oam[i].y);
+                        if (!flip_vertical) {
+                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                // top half of tile
+                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)           // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)      // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((ppu->scanline - ppu->secondary_oam[i].y) & 0x07));  // Which Row in cell? (0->7)
+
+                            else                                                                                                                              // bottom half of tile
+                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)             // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((ppu->scanline - ppu->secondary_oam[i].y) & 0x07));    // Which Row in cell? (0->7)
+                        }
+
                         else {
-                            ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) + (7 - (y_offset % 8)));
-                            ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((pattern_index & 0x1) * 0x1000) + ((pattern_index & 0xfe) * 0x10) +  (7 - (y_offset % 8)) + 8);
+                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                  // bottom half of tile
+                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)             // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07));    // Which Row in cell? (0->7)
+
+                            else                                                                                                                            // top half of tile
+                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)           // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)      // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07));  // Which Row in cell? (0->7)
                         }
                     }
+
+                    if (flip_horizontal)
+                        ppu->sprite_shifter_pattern_lo[i] = flip_byte(ppu->sprite_shifter_pattern_lo[i]);
                 }
 
-                if (flip_horizontal) {
-                    ppu->sprite_shifter_pattern_lo[i] = flip_byte(ppu->sprite_shifter_pattern_lo[i]);
-                    ppu->sprite_shifter_pattern_hi[i] = flip_byte(ppu->sprite_shifter_pattern_hi[i]);
+                else if ((ppu->cycles - 263) % 8 == 0) {
+                    int i = (ppu->cycles - 257) / 8;
+                    bool flip_vertical = (ppu->secondary_oam[i].attributes >> 7) & 0x1;
+                    bool flip_horizontal = (ppu->secondary_oam[i].attributes >> 6) & 0x1;
+
+                    if (ppu->control.sprite_height == 0) {
+                        uint8_t y_offset = flip_vertical ? (7 - (ppu->scanline - ppu->secondary_oam[i].y)) : (ppu->scanline - ppu->secondary_oam[i].y);
+                        uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
+                        ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, (ppu->control.sprite_tile_select * 0x1000) + (pattern_index * 0x10) + y_offset + 8);
+
+                    }
+
+                    else {
+                        // 8x16 mode
+                        uint8_t pattern_index = ppu->secondary_oam[i].tile_index;
+                        uint8_t y_offset = (ppu->scanline - ppu->secondary_oam[i].y);
+                        if (!flip_vertical) {
+                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                    // top half of tile
+                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)               // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)          // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((ppu->scanline - ppu->secondary_oam[i].y) & 0x07) + 8);  // Which Row in cell? (0->7)
+
+                            else                                                                                                                                // bottom half of tile
+                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)               // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)    // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((ppu->scanline - ppu->secondary_oam[i].y) & 0x07) + 8);  // Which Row in cell? (0->7)
+                        }
+
+                        else {
+                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                    // bottom half of tile
+                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)               // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)    // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07) + 8);  // Which Row in cell? (0->7)
+
+                            else                                                                                                                                // top half of tile
+                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)               // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)          // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07) + 8);  // Which Row in cell? (0->7)
+                        }
+                    }
+
+                    if (flip_horizontal) {
+                        ppu->sprite_shifter_pattern_hi[i] = flip_byte(ppu->sprite_shifter_pattern_hi[i]);
+                    }
                 }
+            }
+        }
+
+        if (ppu->cycles == 338 || ppu->cycles == 340) {
+            if (!ppu->status.vblank && ppu->mask.background_enable || ppu->mask.sprite_enable) {
+                ppu_read_from_bus(ppu->bus, (ppu->vram_address.reg & 0x0FFF));
             }
         }
 
@@ -748,7 +802,6 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
 
             int x = x_start;
             int y = y_start;
-
             for (int i = 0; i < scale * scale; i++) {
                 x = x_start + (i % scale);
                 y = y_start + (i / scale);
@@ -834,7 +887,6 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
             ppu->status.vblank = 1;
             if (ppu->control.nmi_enable)
                 ppu->nmi = true;
-            
         }
     }
 

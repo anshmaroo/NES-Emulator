@@ -105,6 +105,9 @@ uint8_t cpu_read_from_bus(Bus *bus, uint16_t address) {
 }
 
 void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
+    if (address < 0x3f00 && bus->mapper->chr_bank_switch == false)
+        bus->a12_state_current = (address & 0x1000) != 0;
+
     if (address <= 0x0fff) {
         bus->pattern_table_0[address] = value;
     }
@@ -172,6 +175,9 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
 }
 
 uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
+    if (address < 0x3f00)
+        bus->a12_state_current = (address & 0x1000) != 0;
+
     uint8_t value = 0;
     if (address <= 0x0fff) {
         value = bus->pattern_table_0[address];
@@ -243,8 +249,6 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
 
 void clock_bus(Bus *bus, SDL_Window *window) {
     clock_ppu(bus->ppu, window);
-    // printf("ppu->scanline = %d\n", bus->ppu->scanline);
-    // printf("ppu->cycles = %d\n", bus->ppu->cycles);
     if (bus->system_cycles % 3 == 0 && !bus->ppu->oamdma_write) {
         clock_cpu(bus->cpu);
     }
@@ -254,14 +258,8 @@ void clock_bus(Bus *bus, SDL_Window *window) {
         nmi(bus->cpu);
     }
 
-    if (bus->previous_vram_bank == 0 && bus->ppu->vram_address.reg >= 0x1000) {
-        bus->previous_vram_bank = 1;
-        bus->mapper->a12_rising_edge();
-    }
-
-    else if (bus->previous_vram_bank == 1 && bus->ppu->vram_address.reg < 0x1000) {
-        bus->previous_vram_bank = 0;
-    }
+    
+    bus->mapper->check_a12_rising_edge();
 
     bus->system_cycles++;
 }

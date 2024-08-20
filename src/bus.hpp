@@ -30,7 +30,8 @@ typedef struct Bus {
 
     // SYSTEM STATUS
     uint32_t system_cycles;
-    bool previous_vram_bank;
+    bool a12_state_previous;
+    bool a12_state_current;
 
     int poll_input1;
     int poll_input2;

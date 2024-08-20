@@ -25,21 +25,21 @@ void Mapper_4::initialize() {
     allow_cpu_writes = false;
 
     // LOAD CHR ROM
+    this->chr_bank_switch = true;
     if (this->num_chr_banks > 0) {
         uint32_t chr_bank_start = this->prg_bank_size * this->num_prg_banks + 0x10;
         for (int i = 0; i < chr_bank_size; i++) {
             ppu_write_to_bus(bus, i, buffer[i + chr_bank_start]);
         }
     }
+    this->chr_bank_switch = false;
 }
 
 void Mapper_4::handle_write(uint16_t address, uint8_t value) {
     if (address >= 0x6000 && address <= 0x7fff) {
-        if (this->prg_ram_protect > 0) {  // disregard intended behavior for simplicity
-            this->allow_cpu_writes = true;
-            cpu_write_to_bus(bus, address, value);
-            this->allow_cpu_writes = false;
-        }
+        this->allow_cpu_writes = true;
+        cpu_write_to_bus(bus, address, value);
+        this->allow_cpu_writes = false;
     }
 
     if (address >= 0x8000 && address <= 0x9fff) {
@@ -55,25 +55,26 @@ void Mapper_4::handle_write(uint16_t address, uint8_t value) {
     else if (address >= 0xA000 && address <= 0xBFFF) {
         if (address % 2 == 0) {
             this->mirroring = value;
-            set_mirror_mode(this->bus->ppu, this->mirroring & 0x1);
-        }
-
-        else
+            set_mirror_mode(this->bus->ppu, (this->mirroring & 0x1));
+        } else
             this->prg_ram_protect = value;
     }
 
     else if (address >= 0xC000 && address <= 0xDFFF) {
-        if (address % 2 == 0)
+        if (address % 2 == 0) {
             this->irq_latch = value;
-        else
+        } else
             this->irq_counter = 0;
     }
 
     else if (address >= 0xE000 && address <= 0xFFFF) {
-        if (address % 2 == 0)
+        if (address % 2 == 0) {
+            this->fire_irq = false;
             this->irq_enable = 0;
-        else
+        } else {
+            this->fire_irq = true;
             this->irq_enable = 1;
+        }
     }
 }
 
@@ -119,9 +120,12 @@ void Mapper_4::switch_chr_bank() {
 
     address %= 0x2000;
     uint32_t bank_start = (0x400 * this->bank_number) + (this->prg_bank_size * this->num_prg_banks) + 0x10;
+
+    this->chr_bank_switch = true;
     for (int i = 0; i < bank_size; i++) {
         ppu_write_to_bus(bus, address + i, this->buffer[bank_start + i]);
     }
+    this->chr_bank_switch = false;
 }
 
 void Mapper_4::switch_prg_bank() {
@@ -187,14 +191,22 @@ void Mapper_4::switch_prg_bank() {
     }
 }
 
-void Mapper_4::a12_rising_edge() {
-    if (this->irq_counter > 0)
-        this->irq_counter--;
+void Mapper_4::check_a12_rising_edge() {
+    if (this->bus->a12_state_current == 0) {
+        this->a12_low_counter++;
+    }
 
-    else if (this->irq_counter == 0) {
-        if (this->irq_enable > 0)
-            irq(this->bus->cpu);
-        this->irq_counter = this->irq_latch;
+    else {
+        if (this->a12_low_counter >= 9) {
+            if (this->irq_counter == 0)
+                this->irq_counter = this->irq_latch;
+            else 
+                this->irq_counter--;
+
+            if (this->irq_counter == 0 && this->irq_enable) 
+                irq(this->bus->cpu);
+        }
+        this->a12_low_counter = 0;
     }
 }
 

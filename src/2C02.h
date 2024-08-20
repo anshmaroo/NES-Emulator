@@ -100,17 +100,19 @@ typedef struct State2C02 {
     uint8_t fine_x;
     bool w;
 
-
     // OAM
     Sprite *primary_oam;      // SPRITE DATA (256 bytes)
     Sprite *secondary_oam;    // SPRITE DATA (32 bytes)
+    Sprite *secondary_oam_previous;
+    
     uint8_t n;
-
-    // sprite rendering
     uint8_t sprite_count;
+    uint8_t sprite_count_previous;
     uint8_t *sprite_shifter_pattern_lo;
     uint8_t *sprite_shifter_pattern_hi;
+    bool sprite_found;
     bool sprite_zero_on_scanline;
+    bool sprite_zero_on_scanline_previous;
     bool sprite_zero_rendered;
 
     // OAMDMA
@@ -136,6 +138,7 @@ typedef struct State2C02 {
     int scanline;
     int cycles;
     bool nmi;
+
 
     // BUS
     struct Bus *bus;

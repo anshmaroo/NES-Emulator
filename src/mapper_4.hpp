@@ -29,12 +29,18 @@ class Mapper_4 : public Mapper {
         uint8_t irq_reload;
         uint8_t irq_disable;
         uint8_t irq_enable;
+        int a12_low_counter;
+        bool fire_irq;
+        
+
+        
+
 
         void initialize() override;
         void handle_write(uint16_t address, uint8_t value) override;
         void switch_prg_bank();
         void switch_chr_bank();
-        void a12_rising_edge();
+        void check_a12_rising_edge();
         void cleanup() override;
 };
 
