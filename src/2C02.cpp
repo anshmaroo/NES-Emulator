@@ -697,14 +697,14 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                         }
 
                         else {
-                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                  // bottom half of tile
-                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)             // Which Pattern Table? 0KB or 4KB offset
-                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)  // Which Cell? Tile ID * 16 (16 bytes per tile)
-                                                                                                    | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07));    // Which Row in cell? (0->7)
+                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                      // bottom half of tile
+                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)                 // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)      // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                                                                                    | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07));  // Which Row in cell? (0->7)
 
-                            else                                                                                                                            // top half of tile
-                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)           // Which Pattern Table? 0KB or 4KB offset
-                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)      // Which Cell? Tile ID * 16 (16 bytes per tile)
+                            else                                                                                                                                  // top half of tile
+                                ppu->sprite_shifter_pattern_lo[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)                 // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)            // Which Cell? Tile ID * 16 (16 bytes per tile)
                                                                                                     | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07));  // Which Row in cell? (0->7)
                         }
                     }
@@ -742,14 +742,14 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                         }
 
                         else {
-                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                    // bottom half of tile
-                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)               // Which Pattern Table? 0KB or 4KB offset
-                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)    // Which Cell? Tile ID * 16 (16 bytes per tile)
+                            if (ppu->scanline - ppu->secondary_oam[i].y < 8)                                                                                          // bottom half of tile
+                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)                     // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | (((ppu->secondary_oam[i].tile_index & 0xfe) + 1) << 4)          // Which Cell? Tile ID * 16 (16 bytes per tile)
                                                                                                     | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07) + 8);  // Which Row in cell? (0->7)
 
-                            else                                                                                                                                // top half of tile
-                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)               // Which Pattern Table? 0KB or 4KB offset
-                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)          // Which Cell? Tile ID * 16 (16 bytes per tile)
+                            else                                                                                                                                      // top half of tile
+                                ppu->sprite_shifter_pattern_hi[i] = ppu_read_from_bus(ppu->bus, ((ppu->secondary_oam[i].tile_index & 0x01) << 12)                     // Which Pattern Table? 0KB or 4KB offset
+                                                                                                    | ((ppu->secondary_oam[i].tile_index & 0xfe) << 4)                // Which Cell? Tile ID * 16 (16 bytes per tile)
                                                                                                     | ((7 - (ppu->scanline - ppu->secondary_oam[i].y)) & 0x07) + 8);  // Which Row in cell? (0->7)
                         }
                     }
@@ -786,28 +786,30 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         uint16_t palette_address = 0x3f00;
 
         if (ppu->mask.background_enable) {
-            uint16_t bit_mux = 0x8000 >> ppu->fine_x;  // select correct bit from the highest 8 bits in the shift register
+            // left column background check
+            if ((ppu->cycles - 1) < 8 && ppu->mask.background_left_column_enable || (ppu->cycles - 1) >= 8) {
+                uint16_t bit_mux = 0x8000 >> ppu->fine_x;  // select correct bit from the highest 8 bits in the shift register
 
-            uint8_t p0_pixel = (ppu->bg_shifter_pattern_lo & bit_mux) > 0;
-            uint8_t p1_pixel = (ppu->bg_shifter_pattern_hi & bit_mux) > 0;
+                uint8_t p0_pixel = (ppu->bg_shifter_pattern_lo & bit_mux) > 0;
+                uint8_t p1_pixel = (ppu->bg_shifter_pattern_hi & bit_mux) > 0;
 
-            bg_pixel = (p1_pixel << 1) | p0_pixel;
+                bg_pixel = (p1_pixel << 1) | p0_pixel;
 
-            uint8_t bg_pal0 = (ppu->bg_shifter_attribute_lo & bit_mux) > 0;
-            uint8_t bg_pal1 = (ppu->bg_shifter_attribute_hi & bit_mux) > 0;
+                uint8_t bg_pal0 = (ppu->bg_shifter_attribute_lo & bit_mux) > 0;
+                uint8_t bg_pal1 = (ppu->bg_shifter_attribute_hi & bit_mux) > 0;
 
-            bg_palette = (bg_pal1 << 1) | bg_pal0;
-
-            palette_address += (bg_pixel == 0) ? 0x00 : (bg_palette << 2) + bg_pixel;
-
-            int x = x_start;
-            int y = y_start;
-            for (int i = 0; i < scale * scale; i++) {
-                x = x_start + (i % scale);
-                y = y_start + (i / scale);
-                set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, palette_address)]);
+                bg_palette = (bg_pal1 << 1) | bg_pal0;
+                palette_address += (bg_pixel == 0) ? 0x00 : (bg_palette << 2) + bg_pixel;
             }
-            // printf("rendering bg\n");
+        }
+
+        int x = x_start;
+        int y = y_start;
+
+        for (int i = 0; i < scale * scale; i++) {
+            x = x_start + (i % scale);
+            y = y_start + (i / scale);
+            set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, palette_address)]);
         }
 
         // sprite rendering
@@ -815,45 +817,47 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         uint8_t sprite_palette = 0x00;
         uint8_t p0_pixel = 0x00;
         uint8_t p1_pixel = 0x00;
-        palette_address = 0x10;
+        palette_address = 0x3f10;
 
         if (ppu->mask.sprite_enable) {
             // reset sprite zero hit flag
             ppu->sprite_zero_rendered = false;
-            // render each sprite
-            for (int i = 0; i < ppu->sprite_count; i++) {
-                // check if the correct x location has been reached
-                if (ppu->secondary_oam[i].x == 0) {
-                    // get pixel value
-                    p0_pixel = (ppu->sprite_shifter_pattern_lo[i] & 0x80) > 0;
-                    p1_pixel = (ppu->sprite_shifter_pattern_hi[i] & 0x80) > 0;
-                    sprite_pixel = (p1_pixel << 1) | p0_pixel;
 
-                    // render only if pixel is opaque
-                    if (sprite_pixel != 0) {
-                        // check for sprite zero hit
-                        if (i == 0) {
-                            ppu->sprite_zero_rendered = true;
+            if ((ppu->cycles - 1) < 8 && ppu->mask.background_left_column_enable || (ppu->cycles - 1) >= 8) {
+                // render each sprite
+                for (int i = 0; i < ppu->sprite_count; i++) {
+                    // check if the correct x location has been reached
+                    if (ppu->secondary_oam[i].x == 0) {
+                        // get pixel value
+                        p0_pixel = (ppu->sprite_shifter_pattern_lo[i] & 0x80) > 0;
+                        p1_pixel = (ppu->sprite_shifter_pattern_hi[i] & 0x80) > 0;
+                        sprite_pixel = (p1_pixel << 1) | p0_pixel;
+
+                        // render only if pixel is opaque
+                        if (sprite_pixel != 0) {
+                            // check for sprite zero hit
+                            if (i == 0) {
+                                ppu->sprite_zero_rendered = true;
+                            }
+
+                            // check for sprite priority
+                            if ((ppu->secondary_oam[i].attributes >> 5) & 0x1 && bg_pixel != 0)
+                                break;
+
+                            // render only if sprite has priority
+                            sprite_palette = ppu->secondary_oam[i].attributes & 0x3;
+                            palette_address |= (sprite_palette << 2) | (sprite_pixel & 0x3);
+
+                            int x = x_start;
+                            int y = y_start;
+
+                            for (int i = 0; i < scale * scale; i++) {
+                                x = x_start + (i % scale);
+                                y = y_start + (i / scale);
+                                set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, 0x3f00 | palette_address)]);
+                            }
+                            break;
                         }
-
-                        // check for sprite priority
-                        if ((ppu->secondary_oam[i].attributes >> 5) & 0x1 && bg_pixel != 0) {
-                            continue;
-                        }
-
-                        // render only if sprite has priority
-                        sprite_palette = ppu->secondary_oam[i].attributes & 0x3;
-                        palette_address |= (sprite_palette << 2) | (sprite_pixel & 0x3);
-
-                        int x = x_start;
-                        int y = y_start;
-
-                        for (int i = 0; i < scale * scale; i++) {
-                            x = x_start + (i % scale);
-                            y = y_start + (i / scale);
-                            set_pixel(window, x, y, SYSTEM_PALETTE[ppu_read_from_bus(ppu->bus, 0x3f00 | palette_address)]);
-                        }
-                        break;
                     }
                 }
             }

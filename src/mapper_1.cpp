@@ -21,7 +21,6 @@ void Mapper_1::initialize() {
         cpu_write_to_bus(bus, 0xc000 + i, this->buffer[last_bank_start + i]);
     }
 
-    printf("LOADING SAVE!\n");
     // LOAD SAVE
     const size_t start_index = 0x1FE0;
     const size_t end_index = 0x3FDF;
@@ -31,7 +30,7 @@ void Mapper_1::initialize() {
     strcpy(save_file, game);
     strcat(save_file, ".save");
 
-    // Open the file for writing in binary mode
+    // Open the file for reading in binary mode
     FILE *file = fopen(save_file, "rb");
     if (file == NULL) {
         perror("Failed to open file");

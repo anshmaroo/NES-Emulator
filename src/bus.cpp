@@ -170,7 +170,6 @@ void ppu_write_to_bus(Bus *bus, uint16_t address, uint8_t value) {
             address = 0x000C;
 
         bus->palette[address] = value;
-        // GLOBAL_PALETTE[address] = value;
     }
 }
 
@@ -241,7 +240,6 @@ uint8_t ppu_read_from_bus(Bus *bus, uint16_t address) {
             address = 0x000C;
 
         value = bus->palette[address];
-        // printf("PALETTE VALUE = %04x\n", address);
     }
 
     return value;
@@ -258,7 +256,7 @@ void clock_bus(Bus *bus, SDL_Window *window) {
         nmi(bus->cpu);
     }
 
-    
+        
     bus->mapper->check_a12_rising_edge();
 
     bus->system_cycles++;

@@ -22,6 +22,32 @@ void Mapper_4::initialize() {
         cpu_write_to_bus(bus, 0xc000 + i, this->buffer[last_bank_start + i]);
     }
 
+    // LOAD SAVE
+    const size_t start_index = 0x1FE0;
+    const size_t end_index = 0x3FDF;
+    const size_t num_bytes = end_index - start_index + 1;
+
+    char *save_file = (char *)malloc(sizeof(char) * (strlen(game) + 4));
+    strcpy(save_file, game);
+    strcat(save_file, ".save");
+
+    // Open the file for reading in binary mode
+    FILE *file = fopen(save_file, "rb");
+    if (file == NULL) {
+        perror("Failed to open file");
+        // exit(EXIT_FAILURE);
+    }
+
+    else {
+        if (fread(this->bus->unmapped + start_index, 1, num_bytes, file) != num_bytes) {
+            perror("Failed to read from file");
+            fclose(file);
+            // exit(EXIT_FAILURE);
+        }
+
+        fclose(file);
+    }
+
     allow_cpu_writes = false;
 
     // LOAD CHR ROM
@@ -200,15 +226,41 @@ void Mapper_4::check_a12_rising_edge() {
         if (this->a12_low_counter >= 9) {
             if (this->irq_counter == 0)
                 this->irq_counter = this->irq_latch;
-            else 
+            else
                 this->irq_counter--;
 
-            if (this->irq_counter == 0 && this->irq_enable) 
+            if (this->irq_counter == 0 && this->irq_enable)
                 irq(this->bus->cpu);
         }
+
         this->a12_low_counter = 0;
     }
 }
 
 void Mapper_4::cleanup() {
+    // Define the start and end indexes
+    const size_t start_index = 0x1FE0;
+    const size_t end_index = 0x3FDF;
+    const size_t num_bytes = end_index - start_index + 1;
+
+    // Open the file for writing in binary mode
+    char *save_file = (char *)malloc(sizeof(char) * (strlen(game) + 4));
+    strcpy(save_file, game);
+    strcat(save_file, ".save");
+    FILE *file = fopen(save_file, "wb");
+    if (file == NULL) {
+        perror("Failed to open file");
+        exit(EXIT_FAILURE);
+    }
+
+    // Write the specified range of bytes to the file
+    if (fwrite(this->bus->unmapped + start_index, 1, num_bytes, file) != num_bytes) {
+        perror("Failed to write to file");
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+    printf("SAVE COMPLETE!\n");
+
+    // Close the file
+    fclose(file);
 }

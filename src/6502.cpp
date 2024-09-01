@@ -1,8 +1,8 @@
 #include "6502.h"
+
 #include "2C02.h"
 #include "Disassemble6502.h"
 #include "bus.hpp"
-
 
 /************************ CREATE OBJECT ************************/
 
@@ -41,7 +41,6 @@ State6502 *Init6502(void) {
     return cpu;
 }
 
-
 /************************ ADDRESSING MODES ************************/
 
 uint16_t zero_page(State6502 *cpu, uint8_t *opcode) {
@@ -52,11 +51,11 @@ uint16_t zero_page_x(State6502 *cpu, uint8_t *opcode) {
     uint8_t address;
     if ((opcode[1] >> 7) & 1) {
         address = (cpu->x - (~opcode[1] + 1)) & 0xff;
-    } 
-    
+    }
+
     else {
         address = (cpu->x + opcode[1]) & 0xff;
-    } 
+    }
 
     return address;
 }
@@ -65,8 +64,8 @@ uint16_t zero_page_y(State6502 *cpu, uint8_t *opcode) {
     uint8_t address;
     if ((opcode[1] >> 7) & 1) {
         address = (cpu->y - (~opcode[1] + 1)) & 0xff;
-    } 
-    
+    }
+
     else {
         address = (cpu->y + opcode[1]) & 0xff;
     }
@@ -78,22 +77,20 @@ uint16_t absolute(State6502 *cpu, uint8_t *opcode) {
     return (opcode[2] << 8) | (opcode[1]);
 }
 
-uint16_t absolute_x(State6502 *cpu, uint8_t *opcode) {	
+uint16_t absolute_x(State6502 *cpu, uint8_t *opcode) {
     uint16_t address = (cpu->x + (opcode[2] << 8 | opcode[1]));
     if ((address & 0xFF00) != (opcode[2] << 8))
-		cpu->cycles++;
-    
+        cpu->cycles++;
+
     return address;
-	
 }
 
 uint16_t absolute_y(State6502 *cpu, uint8_t *opcode) {
     uint16_t address = (cpu->y + (opcode[2] << 8 | opcode[1]));
     if ((address & 0xFF00) != (opcode[2] << 8))
-		cpu->cycles++;
+        cpu->cycles++;
 
     return address;
-
 }
 
 uint16_t x_indexed_indirect(State6502 *cpu, uint8_t *opcode) {
@@ -103,18 +100,17 @@ uint16_t x_indexed_indirect(State6502 *cpu, uint8_t *opcode) {
 
 uint16_t indirect_y_indexed(State6502 *cpu, uint8_t *opcode) {
     uint16_t t = opcode[1];
-	uint16_t lo = cpu_read_from_bus(cpu->bus, t & 0x00FF);
-	uint16_t hi = cpu_read_from_bus(cpu->bus, (t + 1) & 0x00FF);
+    uint16_t lo = cpu_read_from_bus(cpu->bus, t & 0x00FF);
+    uint16_t hi = cpu_read_from_bus(cpu->bus, (t + 1) & 0x00FF);
 
-	uint16_t address = (hi << 8) | lo;
-	address += cpu->y;
-	
-	if ((address & 0xFF00) != (hi << 8))
-		cpu->cycles++;
+    uint16_t address = (hi << 8) | lo;
+    address += cpu->y;
+
+    if ((address & 0xFF00) != (hi << 8))
+        cpu->cycles++;
 
     return address;
 }
-
 
 /************************ STATUS REGISTER FUNCTIONS ************************/
 /**
@@ -1177,7 +1173,6 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
             break;
         }
 
-
         case 0x32:  // JAM
         {
             break;
@@ -1554,10 +1549,10 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
         case 0x6c:  // JMP ($oper $oper) (indirect)
         {
             uint16_t index = (opcode[2] << 8) | opcode[1];
-            uint16_t address = (cpu_read_from_bus(cpu->bus, (uint16_t)(index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
-            if (index & 0xff == 0xff) {
+            uint16_t address = (cpu_read_from_bus(cpu->bus, (index + 1)) << 8) | cpu_read_from_bus(cpu->bus, index);
+
+            if ((index & 0xff) == 0xff)
                 address = (cpu_read_from_bus(cpu->bus, (uint16_t)(index & 0xff00)) << 8) | cpu_read_from_bus(cpu->bus, index);
-            }
 
             jump(cpu, address);
             break;
