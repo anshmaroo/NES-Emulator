@@ -1,38 +1,55 @@
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+
 #include "window.h"
 
 #define SINGLE_SCREEN_LOWER 1
-#define SINGLE_SCREEN_UPPER 0  
+#define SINGLE_SCREEN_UPPER 0
 #define VERTICAL 2
-#define HORIZONTAL 3 
+#define HORIZONTAL 3
 
-typedef struct Control {
-    bool nmi_enable;
-    bool master_slave_select;
-    bool sprite_height;
-    bool background_tile_select;
-    bool sprite_tile_select;
-    bool vram_increment_mode;
-    short nametable_select;
+typedef union Control {
+    struct {
+        uint8_t nametable_select : 2;
+        uint8_t vram_increment_mode : 1;
+        uint8_t sprite_tile_select : 1;
+        uint8_t background_tile_select : 1;
+        uint8_t sprite_height : 1;
+        uint8_t master_slave_select : 1;
+        uint8_t nmi_enable : 1;
+        
+    };
+
+    uint8_t reg : 8;
 
 } Control;
 
-typedef struct Mask {
-    bool blue;
-    bool green;
-    bool red;
-    bool sprite_enable;
-    bool background_enable;
-    bool sprite_left_column_enable;
-    bool background_left_column_enable;
-    bool grayscale;
+typedef union Mask {
+    struct {
+        uint8_t grayscale : 1;
+        uint8_t background_left_column_enable : 1;
+        uint8_t sprite_left_column_enable : 1;
+        uint8_t background_enable : 1;
+        uint8_t sprite_enable : 1;
+        uint8_t red : 1;
+        uint8_t green : 1;
+        uint8_t blue : 1;  
+    };
+
+    uint8_t reg : 8;
+
 } Mask;
 
-typedef struct Status {
-    bool vblank;
-    bool sprite_zero_hit;
-    bool sprite_overflow;
+typedef union Status {
+    struct {
+        uint8_t open_bus : 5;
+        uint8_t sprite_overflow : 1;
+        uint8_t sprite_zero_hit : 1;
+        uint8_t vblank : 1;
+    };
+    
+    uint8_t reg : 8;
+
 } Status;
 
 typedef struct OAMaddr {
@@ -60,12 +77,12 @@ typedef struct OAMdma {
 } OAMdma;
 
 typedef union loopy_register {
-    struct  {
+    struct {
         uint16_t coarse_x : 5;
         uint16_t coarse_y : 5;
         uint16_t nametable_x : 1;
         uint16_t nametable_y : 1;
-        uint16_t fine_y : 3; 
+        uint16_t fine_y : 3;
         uint16_t unused : 1;
     };
 
@@ -79,7 +96,6 @@ typedef struct Sprite {
     uint8_t x;
 } Sprite;
 
-
 typedef struct State2C02 {
     Control control;
     Mask mask;
@@ -87,7 +103,7 @@ typedef struct State2C02 {
     OAMaddr oamaddr;
     OAMdata oamdata;
     PPUscroll ppuscroll;
-    PPUaddr ppuaddr; 
+    PPUaddr ppuaddr;
     PPUdata ppudata;
     OAMdma oamdma;
 
@@ -101,9 +117,9 @@ typedef struct State2C02 {
     bool w;
 
     // OAM
-    Sprite *primary_oam;      // SPRITE DATA (256 bytes)
-    Sprite *secondary_oam;    // SPRITE DATA (32 bytes)
-    
+    Sprite *primary_oam;    // SPRITE DATA (256 bytes)
+    Sprite *secondary_oam;  // SPRITE DATA (32 bytes)
+
     uint8_t n;
     uint8_t sprite_count;
     uint8_t *sprite_shifter_pattern_lo;
@@ -115,7 +131,7 @@ typedef struct State2C02 {
     // OAMDMA
     bool oamdma_write;
     int oamdma_clock;
-    
+
     // IO
     uint8_t data_buffer;
     uint8_t io_db;
@@ -136,7 +152,6 @@ typedef struct State2C02 {
     int cycles;
     bool nmi;
 
-
     // BUS
     struct Bus *bus;
 
@@ -144,129 +159,118 @@ typedef struct State2C02 {
 
 /**
  * @brief creates 2C02 object
- * 
+ *
  */
 State2C02 *Init2C02();
 
 /**
  * @brief update ppu cycles
- * 
- * @param ppu 
- * @param count 
+ *
+ * @param ppu
+ * @param count
  */
 void ppu_add_cycles(State2C02 *ppu, uint8_t count);
 
-
-
 /**
  * @brief write to ppu register
- * 
- * @param ppu 
- * @param address 
- * @param value 
+ *
+ * @param ppu
+ * @param address
+ * @param value
  */
 void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value);
 
 /**
  * @brief read from ppu register
- * 
- * @param ppu 
- * @param address 
- * @return uint8_t 
+ *
+ * @param ppu
+ * @param address
+ * @return uint8_t
  */
 uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address);
 
 /**
  * @brief set the mirror mode
- * 
- * @param ppu 
- * @param mirror_mode 
+ *
+ * @param ppu
+ * @param mirror_mode
  */
 void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode);
 
-
 /**
  * @brief render pattern tables to window
- * 
- * @param window 
+ *
+ * @param window
  */
 void render_pattern_tables(State2C02 *ppu, SDL_Window *window);
 
 /**
  * @brief render all 4 nametables
- * 
- * @param ppu 
- * @param window 
+ *
+ * @param ppu
+ * @param window
  */
 void render_nametables(State2C02 *ppu, SDL_Window *window);
 
 /**
  * @brief print nametables to file
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
 void print_nametables(State2C02 *ppu);
 
-
-
 /**
  * @brief increases vram x position and switches to next nametable if necessary
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
-void increment_scroll_x(State2C02 * ppu);
+void increment_scroll_x(State2C02 *ppu);
 
 /**
  * @brief increases vram y position and switches to next nametable if necessary
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
-void increment_scroll_y(State2C02 * ppu);
-
-
+void increment_scroll_y(State2C02 *ppu);
 
 /**
  * @brief transfer x address from tram to vram
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
 void transfer_address_x(State2C02 *ppu);
 
 /**
  * @brief transfer y address from tram to vram
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
 void transfer_address_y(State2C02 *ppu);
 
-
-
 /**
  * @brief loads background "shift registers"
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
 void load_background_shifters(State2C02 *ppu);
 
 /**
  * @brief shifts background "shift registers" by one bit
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
 void update_background_shifters(State2C02 *ppu);
 
-
 /**
  * @brief shifts sprite "shift registers" by one bit
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
 void update_sprite_shifters(State2C02 *ppu);
 
-
 /**
  * @brief execute one ppu cycle
- * 
- * @param ppu 
+ *
+ * @param ppu
  */
 void clock_ppu(State2C02 *ppu, SDL_Window *window);

@@ -49,13 +49,16 @@ void Mapper_1::initialize() {
 
     allow_cpu_writes = false;
 
+
     // LOAD CHR ROM
+    this->chr_bank_switch = true;
     if (this->num_chr_banks > 0) {
         uint16_t address_offset = prg_bank_size * this->prg_bank_size + 0x10;
         for (int i = 0; i < chr_bank_size; i++) {
             ppu_write_to_bus(bus, i, buffer[i + address_offset]);
         }
     }
+    this->chr_bank_switch = false;
 
     // set mirroring
     set_mirror_mode(bus->ppu, buffer[6] & 0x1);
@@ -127,7 +130,6 @@ void Mapper_1::switch_chr_bank() {
             // switch entire 8K window
             uint32_t address_offset = 0x4000 * this->num_prg_banks + 0x10;
             uint32_t bank_start = address_offset + (this->chr_bank_0 & 0x1e) * this->chr_bank_size;
-            printf("\tBANK: %d, START ADDRESS = $%06x\n", (this->chr_bank_0 & 0x1e), bank_start);
             for (int i = 0; i < this->chr_bank_size; i++) {
                 ppu_write_to_bus(bus, i, this->buffer[bank_start + i]);
             }
@@ -138,7 +140,6 @@ void Mapper_1::switch_chr_bank() {
             uint32_t address_offset = 0x4000 * this->num_prg_banks + 0x10;
             if (this->chr_bank_to_switch == 0) {
                 uint32_t bank_0_start = address_offset + this->chr_bank_size * (this->chr_bank_0);
-                printf("\tBANK 0: %d, START ADDRESS = $%06x\n", this->chr_bank_0, bank_0_start);
                 for (int i = 0; i < this->chr_bank_size; i++) {
                     ppu_write_to_bus(bus, i, this->buffer[bank_0_start + i]);
                 }
@@ -146,7 +147,6 @@ void Mapper_1::switch_chr_bank() {
 
             else {
                 uint32_t bank_1_start = address_offset + this->chr_bank_size * (this->chr_bank_1);
-                printf("\tBANK 1: %d, START ADDRESS = $%06x\n", this->chr_bank_1, bank_1_start);
                 for (int i = 0; i < this->chr_bank_size; i++) {
                     ppu_write_to_bus(bus, this->chr_bank_size + i, this->buffer[bank_1_start + i]);
                 }
@@ -156,10 +156,8 @@ void Mapper_1::switch_chr_bank() {
 }
 
 void Mapper_1::switch_prg_bank() {
-    // printf("SWITCHING BANK!\n");
     if (this->control.prg_bank_mode <= 1) {
         // switch entire 32K window
-        // printf("\t32K!\n");
         uint32_t bank_start = (this->prg_bank.bank_select >> 1) * 0x8000 + 0x10;
         this->allow_cpu_writes = true;
         for (int i = 0; i < 0x8000; i++) {
@@ -170,7 +168,6 @@ void Mapper_1::switch_prg_bank() {
 
     else if (this->control.prg_bank_mode == 2) {
         // fix first bank, switch last bank
-        // printf("\tLAST 16K BANK!\n");
         this->allow_cpu_writes = true;
         for (int i = 0; i < 0x4000; i++) {
             cpu_write_to_bus(bus, 0x8000 + i, this->buffer[0x10 + i]);
@@ -187,7 +184,6 @@ void Mapper_1::switch_prg_bank() {
 
     else {
         // switch first bank, fix last bank
-        // printf("\tFIRST 16K BANK!\n");
         uint32_t bank_start = (this->prg_bank.bank_select) * 0x4000 + 0x10;
         this->allow_cpu_writes = true;
         for (int i = 0; i < 0x4000; i++) {
@@ -225,7 +221,6 @@ void Mapper_1::cleanup() {
         fclose(file);
         exit(EXIT_FAILURE);
     }
-    printf("SAVE COMPLETE!\n");
 
     // Close the file
     fclose(file);

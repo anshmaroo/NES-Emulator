@@ -14,6 +14,7 @@
 #include "src/mapper_2.hpp"
 #include "src/mapper_3.hpp"
 #include "src/mapper_4.hpp"
+#include "src/mapper_76.hpp"
 #include "src/window.h"
 
 
@@ -96,6 +97,11 @@ int main(int argc, char **argv) {
         case 4:
             // mapper interface for MMC3
             mapper = new Mapper_4(game, mapper_number, buffer, bus);
+            break;
+        
+        case 76:
+            // mapper interface for Mapper 076
+            mapper = new Mapper_76(game, mapper_number, buffer, bus);
             break;
 
         default:
@@ -184,6 +190,10 @@ int main(int argc, char **argv) {
                         
                         case SDLK_p:
                             paused = !paused;
+                            break;
+
+                        case SDLK_SLASH:
+                            cpu->debug = !cpu->debug;
                             break;
 
                     }

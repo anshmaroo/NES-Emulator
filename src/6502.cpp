@@ -38,6 +38,8 @@ State6502 *Init6502(void) {
 
     cpu->bus = NULL;
 
+    cpu->debug = false;
+
     return cpu;
 }
 
@@ -835,7 +837,7 @@ static inline void isc(State6502 *cpu, uint16_t address) {
 /************************ EMULATION ************************/
 
 int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
-    if (DEBUG) {
+    if (cpu->debug) {
         printf("%s\n", Disassemble6502Op(opcode, cpu->pc));
     }
 
@@ -2543,7 +2545,7 @@ int emulate6502Op(State6502 *cpu, uint8_t *opcode) {
     }
 
     /* print out processor cpu */
-    if (DEBUG) {
+    if (cpu->debug) {
         printf("\tN=%d,V=%d,B=%d,D=%d,I=%d,Z=%d,C=%d\n", cpu->sr.n, cpu->sr.v,
                cpu->sr.b, cpu->sr.d, cpu->sr.i, cpu->sr.z, cpu->sr.c);
         printf("\tA $%02x X $%02x Y $%02x SP %04x PC %04x\n", cpu->a, cpu->x,

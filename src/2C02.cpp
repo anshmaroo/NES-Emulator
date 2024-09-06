@@ -71,35 +71,16 @@ void write_to_ppu_register(State2C02 *ppu, uint16_t address, uint8_t value) {
     ppu->io_db = value;
     switch (address) {
         case 0x00:  // control
-            ppu->control.nmi_enable = ((value) >> 7) & 0x1;
-            ppu->control.master_slave_select = ((value) >> 6) & 0x1;
-            ppu->control.sprite_height = ((value) >> 5) & 0x1;
-            ppu->control.background_tile_select = ((value) >> 4) & 0x1;
-            ppu->control.sprite_tile_select = ((value) >> 3) & 0x1;
-            ppu->control.vram_increment_mode = ((value) >> 2) & 0x1;
-            ppu->control.nametable_select = (value & 0x3);
-
+            ppu->control.reg = value;
             ppu->tram_address.nametable_y = (ppu->control.nametable_select & 0x2) >> 1;
             ppu->tram_address.nametable_x = ppu->control.nametable_select & 0x1;
-
             break;
 
         case 0x01:  // MASK
-            ppu->mask.blue = ((value) >> 7) & 0x1;
-            ppu->mask.green = ((value) >> 6) & 0x1;
-            ppu->mask.red = ((value) >> 5) & 0x1;
-            ppu->mask.sprite_enable = ((value) >> 4) & 0x1;
-            ppu->mask.background_enable = ((value) >> 3) & 0x1;
-            ppu->mask.sprite_left_column_enable = ((value) >> 2) & 0x1;
-            ppu->mask.background_left_column_enable = ((value) >> 1) & 0x1;
-            ppu->mask.grayscale = value & 0x1;
-
+            ppu->mask.reg = value;
             break;
 
         case 0x02:  // STATUS
-            ppu->status.vblank = ((value) >> 7) & 0x1;
-            ppu->status.sprite_zero_hit = ((value) >> 6) & 0x1;
-            ppu->status.sprite_overflow = ((value) >> 5) & 0x1;
             break;
 
         case 0x03:  // OAMADDR
@@ -189,10 +170,8 @@ uint8_t read_from_ppu_register(State2C02 *ppu, uint16_t address) {
             break;
 
         case 0x02:  // STATUS
-            value |= ppu->status.vblank << 7;
-            value |= ppu->status.sprite_zero_hit << 6;
-            value |= ppu->status.sprite_overflow << 5;
-            value |= ppu->data_buffer & 0x1f;
+
+            value = ppu->status.reg;
 
             ppu->status.vblank = 0;
             ppu->nmi = false;
@@ -237,7 +216,6 @@ void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode) {
     switch (ppu->bus->mapper->mapper_number) {
         case 0:
             ppu->mirror_mode = mirror_mode ? VERTICAL : HORIZONTAL;
-            printf("Mirror mode: %d\n", ppu->mirror_mode);
             break;
 
         case 1:
@@ -255,9 +233,16 @@ void set_mirror_mode(State2C02 *ppu, uint8_t mirror_mode) {
         case 4:
             ppu->mirror_mode = mirror_mode ? HORIZONTAL : VERTICAL;
             break;
+        
+        case 76:
+            ppu->mirror_mode = mirror_mode ? VERTICAL : HORIZONTAL;
+            break;
+        
+        default:
+            ppu->mirror_mode = mirror_mode ? VERTICAL : HORIZONTAL;
+            break;
     }
 }
-
 /**
  * @brief render pattern tables to window
  *
@@ -836,9 +821,8 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
                         // render only if pixel is opaque
                         if (sprite_pixel != 0) {
                             // check for sprite zero hit
-                            if (i == 0) {
+                            if (i == 0) 
                                 ppu->sprite_zero_rendered = true;
-                            }
 
                             // check for sprite priority
                             if ((ppu->secondary_oam[i].attributes >> 5) & 0x1 && bg_pixel != 0)
@@ -864,21 +848,25 @@ void clock_ppu(State2C02 *ppu, SDL_Window *window) {
         }
 
         // sprite 0 hit detection
-        if (!ppu->status.sprite_zero_hit && ppu->sprite_zero_on_scanline && ppu->sprite_zero_rendered) {
+        if (!ppu->status.sprite_zero_hit && bg_pixel != 0 && ppu->sprite_zero_on_scanline && ppu->sprite_zero_rendered) {
+            
             // only if sprite and background rendering are enabled
             if (ppu->mask.background_enable && ppu->mask.sprite_enable) {
                 // left column mode
-                if (!(ppu->mask.background_left_column_enable | ppu->mask.sprite_left_column_enable)) {
+                if (!(ppu->mask.background_left_column_enable && ppu->mask.sprite_left_column_enable)) {
                     // correct x location
                     if (ppu->cycles > 8 && ppu->cycles + 7 < 256) {
                         ppu->status.sprite_zero_hit = 1;
+                        
+                        printf("Sprite zero hit, left column disabled!\n");
+                        printf("Value of PPUMASK = $%02x\n", ppu->mask.reg);
                     }
                 }
 
                 else {
                     // correct x location
-                    if (ppu->cycles + 7 < 256) {
-                        ppu->status.sprite_zero_hit = 1;
+                    if (ppu->cycles >= 0 & ppu->cycles < 258) {
+                        ppu->status.sprite_zero_hit = 1;    
                     }
                 }
             }

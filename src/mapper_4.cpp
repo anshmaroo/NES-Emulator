@@ -259,7 +259,6 @@ void Mapper_4::cleanup() {
         fclose(file);
         exit(EXIT_FAILURE);
     }
-    printf("SAVE COMPLETE!\n");
 
     // Close the file
     fclose(file);

@@ -12,8 +12,8 @@ class Mapper {
         char *game;
         uint8_t mapper_number;
 
-        uint8_t num_prg_banks;
-        uint8_t num_chr_banks;
+        uint16_t num_prg_banks;
+        uint16_t num_chr_banks;
 
         uint16_t prg_bank_size;
         uint16_t chr_bank_size;

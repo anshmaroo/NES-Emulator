@@ -3,10 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
-#define DEBUG false
-
-
 #ifndef __6502_H__c
 #define __6502_H__
 static const uint8_t OPCODES_CYCLES[256] = {
@@ -79,6 +75,8 @@ typedef struct State6502 {
     uint16_t cycles;
 
     struct Bus *bus;
+
+    bool debug;
     
     // uint8_t *memory;
 
