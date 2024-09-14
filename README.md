@@ -4,7 +4,7 @@ A Nintendo Entertainment System emulator built in C/C++ with SDL for graphics.
 
 Currently supports Mappers 0, 1, 2, 3, 4, and 76 (in progress).
 
-Not yet implemented: Audio, second controller, some games in the above mappers. 
+Not yet implemented: Audio, second controller, support for games in the above mappers. 
 
 ## Demos
 <p float="center">
